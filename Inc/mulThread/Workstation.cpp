@@ -4,13 +4,61 @@
 #include <QDebug>
 #include <QSettings>
 #include <QApplication>
+#include <utility>
 
 #include "MyApplication.h"
 #include "frmmain.h"
 #include "ini/settings.h"
 
-Workstation::Workstation(QObject *parent) : QObject(parent) {
-    // frmMain *pfrmMain=(frmMain *)parent;
+Workstation::Workstation(QObject *parent) : QObject(parent),
+    m_pWorkerCamera(nullptr),
+    m_pWorkerImageProcess(nullptr),
+    m_pThreadCamera(nullptr),
+    m_pThreadAlgorithm(nullptr)
+{
+}
+
+Workstation::~Workstation() {
+    // ====== 安全退出机制 (工业级防死锁) ======
+
+    if (m_pWorkerCamera) {
+        m_pWorkerCamera->stopGrabbing(); // 先让硬件停下来
+    }
+
+    if (m_pThreadCamera) {
+        m_pThreadCamera->quit();
+        m_pThreadCamera->wait(2000); // 最多等 2 秒
+    }
+
+    if (m_pThreadAlgorithm) {
+        m_pThreadAlgorithm->quit();
+        m_pThreadAlgorithm->wait(2000);
+    }
+
+    // 打扫战场
+    if (m_pWorkerCamera)       { delete m_pWorkerCamera; }
+    if (m_pWorkerImageProcess) { delete m_pWorkerImageProcess; }
+    if (m_pThreadCamera)       { delete m_pThreadCamera; }
+    if (m_pThreadAlgorithm)    { delete m_pThreadAlgorithm; }
+
+    // //触发进程停止
+    // pApp->isStopTrigger = true;
+    // m_thread_trigger.quit();
+    // m_thread_trigger.wait();
+    //
+    // m_thread_sample.quit();
+    // m_thread_sample.wait();
+    //
+    // m_thread_database.quit();
+    // m_thread_database.wait();
+    //
+    // Sleep(100);
+}
+
+void Workstation::Init(QString iniSessionName) {
+    m_iniSessionName = std::move(iniSessionName);
+    ReadSetting();
+    SettingQThread();
 }
 
 void Workstation::SettingQThread() {
@@ -91,17 +139,12 @@ void Workstation::SettingQThread() {
     m_pThreadCamera->start();
     m_pThreadAlgorithm->start();
 
-    if (m_pWorkerCamera->initCameras(m_workstation_param.master_sn,m_workstation_param.slave_sn,m_workstation_param.camImgHeight))
+    if (m_pWorkerCamera->initCameras(m_workstation_param.master_sn,m_workstation_param.slave_sn,m_workstation_param.camImgWidth,m_workstation_param.camImgHeight))
         m_pWorkerCamera->startGrabbing();
     else {
-        ;// 可以弹个窗：相机初始化失败，请检查网线和 SN 号配置
+        onLogReceived("初始化严重故障：请检查相机网络和配置文件中的 SN 号！");
     }
 
-
-    //图像处理线程
-    m_pWorkerImageProcess = new WorkerImageProcess(m_workstation_param.m_location, m_pWorkerCamera);
-    m_pWorkerImageProcess->init(m_workstation_param);
-    m_pWorkerImageProcess->moveToThread(&m_pThreadAlgorithm);
 
     //工位类的触发信号绑定trigger的工作函数
     connect(this, &Workstation::start_loop_trigger, p_worker_trigger, &WorkerTrigger::on_doSomething);
@@ -125,50 +168,16 @@ void Workstation::SettingQThread() {
     m_thread_mqtt.start();
 }
 
-Workstation::~Workstation() {
-    MyApplication *pApp = (MyApplication *) qApp;
 
-    // 1. 先让底层停止采集，安全释放海康句柄
-    m_pWorkerCamera->stopGrabbing();
 
-    // 2. 告诉线程准备退出
-    m_pThreadCamera->quit();
-    m_pThreadAlgorithm->quit();
-
-    // 3. 阻塞等待线程真正死透 (最多等2秒，防止死锁)
-    m_pThreadCamera->wait(2000);
-    m_pThreadAlgorithm->wait(2000);
-
-    // 4. 打扫战场
-    delete m_pWorkerCamera;
-    delete m_pWorkerImageProcess;
-
-    // //触发进程停止
-    // pApp->isStopTrigger = true;
-    // m_thread_trigger.quit();
-    // m_thread_trigger.wait();
-    //
-    // m_thread_sample.quit();
-    // m_thread_sample.wait();
-    //
-    // m_thread_database.quit();
-    // m_thread_database.wait();
-    //
-    // Sleep(100);
-}
-
-void Workstation::StartTrigger(void) {
+void Workstation::StartTrigger() {
     emit start_loop_trigger();
 }
 
-void Workstation::Init(QString iniSessionName) {
-    m_iniSessionName = iniSessionName;
-    ReadSetting();
-    SettingQThread();
-}
+
 
 // 读取配置文件（从setting.ini加载参数到setting结构体）
-int Workstation::ReadSetting(void) {
+int Workstation::ReadSetting() {
     // 创建INI配置文件处理对象（指定配置文件为setting.ini）
     IniSettings setting_ini("setting.ini");
 
@@ -231,4 +240,25 @@ int Workstation::ReadSetting(void) {
     m_workstation_param.mqttPublicMsg = setting_ini.getValue(m_iniSessionName, "mqtt_public_msg"); // 收识别错误结果的主题
 
     return 0; // 读取成功返回0
+}
+
+void Workstation::onLogReceived(QString msg)
+{
+    // 这里可以统一加上时间戳，或者直接发射给 UI
+    qDebug() << "[中枢日志]" << msg;
+    emit signalLogToUI(msg);
+}
+
+// -------------------------------------------------------------------------
+// 槽函数实现：测宽结果接收
+// -------------------------------------------------------------------------
+void Workstation::onMeasureResultReceived(const MeasureResult& result)
+{
+    // 当算法线程算完宽度后，数据会来到这里 (仍在主线程中执行)
+
+    // 1. 转发给界面 (frmmain) 去画曲线图和显示数值
+    emit signalMeasureResultToUI(result);
+
+    // 2. 如果以后要存数据库，也是在这里调用 WorkerDatabase 模块
+    // 比如：m_pWorkerDatabase->insertResult(result);
 }

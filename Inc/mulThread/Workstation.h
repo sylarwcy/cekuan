@@ -18,6 +18,8 @@ public:
     explicit Workstation(QObject *parent = nullptr);
     ~Workstation();
 
+    void init(); // 系统的总初始化入口
+
     void StartTrigger();
     void SettingQThread();
     void Init(QString iniSessionName);
@@ -27,6 +29,17 @@ public:
     QString m_location;       //工位位置
     int m_serialNumber;       //工位序号
     WorkStation_DATA m_workstation_param; //工位参数
+
+private:
+    // ===== 业务工作类 =====
+    WorkerCamera* m_pWorkerCamera;
+    WorkerImageProcess* m_pWorkerImageProcess;
+
+    // ===== 物理线程 =====
+    QThread* m_pThreadCamera;
+    QThread* m_pThreadAlgorithm;
+
+
 
     QThread m_thread_sample;
     WorkerSample *p_worker_sample;
@@ -40,17 +53,21 @@ public:
     QThread m_thread_mqtt;
     WorkerMQTT *p_worker_mqtt;
 
-    QThread* m_pThreadCamera;
-    WorkerCamera *m_pWorkerCamera;  //相机指针
-
-    QThread* m_pThreadAlgorithm;
-    WorkerImageProcess *m_pWorkerImageProcess; //图像处理
 
 public slots:
-    void onMeasureResultReceived();
+    // 接收底层相机的日志
+    void onLogReceived(QString msg);
+
+    // 接收算法线程算完的结果
+    void onMeasureResultReceived(const MeasureResult& result);
 
 signals:
     //界面刷新开始
     void start_loop_trigger();
+    // 将底层发来的日志，继续向上转发给界面 (frmmain)
+    void signalLogToUI(QString msg);
+
+    // 将算法算出的宽度结果，向上转发给界面画曲线
+    void signalMeasureResultToUI(const MeasureResult& result);
 };
 #endif // CONTROLLER_H

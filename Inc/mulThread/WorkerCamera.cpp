@@ -21,12 +21,13 @@ WorkerCamera::~WorkerCamera() {
     if(m_hDevRight) { MV_CC_DestroyHandle(m_hDevRight); m_hDevRight = NULL; }
 }
 
-bool WorkerCamera::initCameras(const QString& leftSN, const QString& rightSN, const int height)
+bool WorkerCamera::initCameras(const QString& leftSN, const QString& rightSN,  const int imgWidth, const int imgHeight)
 {
     // 保存到成员变量，留给断线重连使用
     m_leftSN = leftSN;
     m_rightSN = rightSN;
-    m_cam_img_height = height;
+    m_imgWidth = imgWidth;
+    m_imgHeight = imgHeight;
 
     MV_CC_DEVICE_INFO_LIST stDeviceList;
     memset(&stDeviceList, 0, sizeof(MV_CC_DEVICE_INFO_LIST));
@@ -65,8 +66,8 @@ bool WorkerCamera::initCameras(const QString& leftSN, const QString& rightSN, co
     MV_CC_OpenDevice(m_hDevRight);
 
     // 2. 让相机每扫 1000 行，发一帧
-    MV_CC_SetIntValue(m_hDevLeft, "Height", m_cam_img_height);
-    MV_CC_SetIntValue(m_hDevRight, "Height", m_cam_img_height);
+    MV_CC_SetIntValue(m_hDevLeft, "Height", m_imgHeight);
+    MV_CC_SetIntValue(m_hDevRight, "Height", m_imgHeight);
 
     // 3. 配置硬件主从与行频
     configureMasterSlave();
@@ -83,7 +84,13 @@ bool WorkerCamera::initCameras(const QString& leftSN, const QString& rightSN, co
     m_bCameraLeftOnline = true;
     m_bCameraRightOnline = true;
 
-    emit signalCameraLog("双线阵相机 SN 匹配成功，初始化完毕！");
+    // [新增] 获取相机的最大宽度（假设现场是 4096），连同高度一起发给 UI
+    MVCC_INTVALUE stIntParam = {0};
+    MV_CC_GetIntValue(m_hDevLeft, "Width", &stIntParam);
+    int camWidth = stIntParam.nCurValue;
+
+    emit signalCameraReady(camWidth, m_imgHeight);
+    emit signalCameraLog(QString("初始化完毕: 画幅 %1 x %2").arg(camWidth).arg(m_imgHeight));
     return true;
 }
 
@@ -92,7 +99,7 @@ void WorkerCamera::configureMasterSlave()
     // 【左相机 Master】：关闭软触发，开启内部行频，配置引脚输出脉冲
     MV_CC_SetEnumValueByString(m_hDevLeft, "TriggerMode", "Off");
     MV_CC_SetBoolValue(m_hDevLeft, "AcquisitionLineRateEnable", true);
-    MV_CC_SetFloatValue(m_hDevLeft, "AcquisitionLineRate", 500.0f); // 默认行频
+    MV_CC_SetFloatValue(m_hDevLeft, "AcquisitionLineRate", m_lineRate); // 默认行频
     MV_CC_SetEnumValueByString(m_hDevLeft, "LineSelector", "Line1");
     MV_CC_SetEnumValueByString(m_hDevLeft, "LineMode", "Output");
     MV_CC_SetEnumValueByString(m_hDevLeft, "LineSource", "ExposureActive");
@@ -251,10 +258,10 @@ void WorkerCamera::onTryReconnect()
             if (sn == m_leftSN) {
                 MV_CC_CreateHandle(&m_hDevLeft, stDeviceList.pDeviceInfo[i]);
                 if (MV_CC_OpenDevice(m_hDevLeft) == MV_OK) {
-                    MV_CC_SetIntValue(m_hDevLeft, "Height", 1000);
+                    MV_CC_SetIntValue(m_hDevLeft, "Height", m_imgHeight);
                     MV_CC_SetEnumValueByString(m_hDevLeft, "TriggerMode", "Off");
                     MV_CC_SetBoolValue(m_hDevLeft, "AcquisitionLineRateEnable", true);
-                    MV_CC_SetFloatValue(m_hDevLeft, "AcquisitionLineRate", 1000.0f);
+                    MV_CC_SetFloatValue(m_hDevLeft, "AcquisitionLineRate", m_lineRate);
                     MV_CC_SetEnumValueByString(m_hDevLeft, "LineSelector", "Line2");
                     MV_CC_SetEnumValueByString(m_hDevLeft, "LineMode", "Output");
                     MV_CC_SetEnumValueByString(m_hDevLeft, "LineSource", "ExposureActive");
@@ -277,7 +284,7 @@ void WorkerCamera::onTryReconnect()
             if (sn == m_rightSN) {
                 MV_CC_CreateHandle(&m_hDevRight, stDeviceList.pDeviceInfo[i]);
                 if (MV_CC_OpenDevice(m_hDevRight) == MV_OK) {
-                    MV_CC_SetIntValue(m_hDevRight, "Height", 1000);
+                    MV_CC_SetIntValue(m_hDevRight, "Height", m_imgHeight);
                     MV_CC_SetEnumValueByString(m_hDevRight, "TriggerSelector", "LineStart");
                     MV_CC_SetEnumValueByString(m_hDevRight, "TriggerMode", "On");
                     MV_CC_SetEnumValueByString(m_hDevRight, "TriggerSource", "Line1");
