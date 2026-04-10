@@ -1,0 +1,9 @@
+<RCC>
+    <qresource prefix="/">
+        <file>image/fontawesome-webfont.ttf</file>
+        <file>image/iconfont.ttf</file>
+        <file>image/pe-icon-set-weather.ttf</file>
+        <file>image/splash1.gif</file>
+        <file>image/bg_banner.jpg</file>
+    </qresource>
+</RCC>
