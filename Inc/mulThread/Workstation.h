@@ -9,6 +9,7 @@
 #include "workStationDataStructure.h"
 #include "WorkerCamera.h"
 #include "WorkerImageProcess.h"
+#include "WorkerPLC.h"
 
 class Workstation : public QObject
 {
@@ -17,8 +18,6 @@ class Workstation : public QObject
 public:
     explicit Workstation(QObject *parent = nullptr);
     ~Workstation();
-
-    void init(); // 系统的总初始化入口
 
     void StartTrigger();
     void SettingQThread();
@@ -34,24 +33,24 @@ private:
     // ===== 业务工作类 =====
     WorkerCamera* m_pWorkerCamera;
     WorkerImageProcess* m_pWorkerImageProcess;
+    WorkerPLC* m_pWorkerPlc;
 
     // ===== 物理线程 =====
     QThread* m_pThreadCamera;
-    QThread* m_pThreadAlgorithm;
+    QThread* m_pThreadImageProcess;
+    QThread* m_plcThread;
 
-
-
-    QThread m_thread_sample;
-    WorkerSample *p_worker_sample;
+    // QThread m_thread_sample;
+    // WorkerSample *p_worker_sample;
 
     QThread m_thread_trigger;
     WorkerTrigger *p_worker_trigger;
 
-    QThread m_thread_database;
-    WorkerDatabase *p_worker_database;
+    // QThread m_thread_database;
+    // WorkerDatabase *p_worker_database;
 
-    QThread m_thread_mqtt;
-    WorkerMQTT *p_worker_mqtt;
+    // QThread m_thread_mqtt;
+    // WorkerMQTT *p_worker_mqtt;
 
 
 public slots:
@@ -59,7 +58,12 @@ public slots:
     void onLogReceived(QString msg);
 
     // 接收算法线程算完的结果
-    void onMeasureResultReceived(const MeasureResult& result);
+    void onWidthDataReady(const WidthResult& result);
+
+    void onDisplayImage(const HalconCpp::HObject& dispImg);
+
+    // 接收算法处理异常（如找不到边缘、Halcon算子报错等）
+    void onProcessError(const QString& errorMsg);
 
 signals:
     //界面刷新开始
@@ -68,6 +72,8 @@ signals:
     void signalLogToUI(QString msg);
 
     // 将算法算出的宽度结果，向上转发给界面画曲线
-    void signalMeasureResultToUI(const MeasureResult& result);
+    void signalMeasureResultToUI(const WidthResult& result);
+
+    void sigSendDataToPLC(double width, double offset, int statusFlag);
 };
 #endif // CONTROLLER_H

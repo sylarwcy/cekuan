@@ -10,6 +10,5 @@
 #include "Preprocess/HalconPreprocessing.h"
 #include "ImgProcessTool.h"
 #include "ModelManager.h"
-// #include "AutomaticStateMachine.h"
 
 #endif //IMGAI_H

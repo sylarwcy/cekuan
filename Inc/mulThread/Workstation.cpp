@@ -14,7 +14,7 @@ Workstation::Workstation(QObject *parent) : QObject(parent),
     m_pWorkerCamera(nullptr),
     m_pWorkerImageProcess(nullptr),
     m_pThreadCamera(nullptr),
-    m_pThreadAlgorithm(nullptr)
+    m_pThreadImageProcess(nullptr)
 {
 }
 
@@ -30,16 +30,16 @@ Workstation::~Workstation() {
         m_pThreadCamera->wait(2000); // 最多等 2 秒
     }
 
-    if (m_pThreadAlgorithm) {
-        m_pThreadAlgorithm->quit();
-        m_pThreadAlgorithm->wait(2000);
+    if (m_pThreadImageProcess) {
+        m_pThreadImageProcess->quit();
+        m_pThreadImageProcess->wait(2000);
     }
 
     // 打扫战场
     if (m_pWorkerCamera)       { delete m_pWorkerCamera; }
     if (m_pWorkerImageProcess) { delete m_pWorkerImageProcess; }
     if (m_pThreadCamera)       { delete m_pThreadCamera; }
-    if (m_pThreadAlgorithm)    { delete m_pThreadAlgorithm; }
+    if (m_pThreadImageProcess)    { delete m_pThreadImageProcess; }
 
     // //触发进程停止
     // pApp->isStopTrigger = true;
@@ -63,9 +63,9 @@ void Workstation::Init(QString iniSessionName) {
 
 void Workstation::SettingQThread() {
     //Sample线程
-    p_worker_sample = new WorkerSample();
-    p_worker_sample->moveToThread(&m_thread_sample);
-    connect(&m_thread_sample, &QThread::finished, p_worker_sample, &QObject::deleteLater);
+    // p_worker_sample = new WorkerSample();
+    // p_worker_sample->moveToThread(&m_thread_sample);
+    // connect(&m_thread_sample, &QThread::finished, p_worker_sample, &QObject::deleteLater);
 
     //trigger界面刷新线程，用触发器老自动停止
     p_worker_trigger = new WorkerTrigger();
@@ -74,12 +74,12 @@ void Workstation::SettingQThread() {
     connect(&m_thread_trigger, &QThread::finished, p_worker_trigger, &QObject::deleteLater);
 
     //database线程
-    p_worker_database = new WorkerDatabase();
-    p_worker_database->init(m_workstation_param);
-    p_worker_database->moveToThread(&m_thread_database);
+    // p_worker_database = new WorkerDatabase();
+    // p_worker_database->init(m_workstation_param);
+    // p_worker_database->moveToThread(&m_thread_database);
     //绑定信号：sig_connect_db() ⬅➡ p_worker_database.connectDB()
-    connect(&m_thread_database, &QThread::started, p_worker_database, &WorkerDatabase::connectDB);
-    connect(&m_thread_database, &QThread::finished, p_worker_database, &QObject::deleteLater);
+    // connect(&m_thread_database, &QThread::started, p_worker_database, &WorkerDatabase::connectDB);
+    // connect(&m_thread_database, &QThread::finished, p_worker_database, &QObject::deleteLater);
 
     //mqtt线程
     // p_worker_mqtt = new WorkerMQTT();
@@ -88,31 +88,32 @@ void Workstation::SettingQThread() {
     // connect(&m_thread_mqtt, &QThread::started, p_worker_mqtt, &WorkerMQTT::startConnectMqtt);
     // connect(&m_thread_mqtt, &QThread::finished, p_worker_mqtt, &QObject::deleteLater);
 
-
-
     // ==============================================================
     // 1. 注册自定义结构体 (极其重要，否则跨线程传参会直接导致程序崩溃)
     // ==============================================================
     qRegisterMetaType<DualCameraChunk>("DualCameraChunk");
-    qRegisterMetaType<MeasureResult>("MeasureResult");
+    qRegisterMetaType<WidthResult>("MeasureResult");
 
     // ==============================================================
     // 2. 实例化业务逻辑类
     // ==============================================================
     m_pWorkerCamera = new WorkerCamera();
     m_pWorkerImageProcess = new WorkerImageProcess();
+    m_pWorkerPlc = new WorkerPLC();
 
     // ==============================================================
     // 3. 实例化 Qt 物理线程
     // ==============================================================
     m_pThreadCamera = new QThread(this);
-    m_pThreadAlgorithm = new QThread(this);
+    m_pThreadImageProcess = new QThread(this);
+    m_plcThread = new QThread(this);
 
     // ==============================================================
     // 4. 将业务类移入物理线程 (这就是 Qt 最优雅的 moveToThread 模型)
     // ==============================================================
     m_pWorkerCamera->moveToThread(m_pThreadCamera);
-    m_pWorkerImageProcess->moveToThread(m_pThreadAlgorithm);
+    m_pWorkerImageProcess->moveToThread(m_pThreadImageProcess);
+    m_pWorkerPlc->moveToThread(m_plcThread);
 
     // ==============================================================
     // 5. 绑定跨线程通信的“神经总线” (强制使用 QueuedConnection 异步队列)
@@ -120,12 +121,12 @@ void Workstation::SettingQThread() {
 
     // [神经A]: 海康底层拼好图 -> 扔给 Halcon 算法大脑
     connect(m_pWorkerCamera, &WorkerCamera::signalDualChunkReady,
-            m_pWorkerImageProcess, &WorkerImageProcess::onProcessDualChunk,
+            m_pWorkerImageProcess, &WorkerImageProcess::onSyncedImagesReady,
             Qt::QueuedConnection);
 
     // [神经B]: Halcon 算法算完宽度 -> 扔给主界面 UI 进行曲线渲染和存库
-    connect(m_pWorkerImageProcess, &WorkerImageProcess::signalMeasureFinished,
-            this, &Workstation::onMeasureResultReceived,
+    connect(m_pWorkerImageProcess, &WorkerImageProcess::resultReady,
+            this, &Workstation::onWidthDataReady,
             Qt::QueuedConnection);
 
     // [神经C]: 收集底层日志 -> 扔给主界面显示
@@ -133,11 +134,14 @@ void Workstation::SettingQThread() {
             this, &Workstation::onLogReceived,
             Qt::QueuedConnection);
 
+    connect(m_pThreadCamera, &QThread::finished, m_pWorkerCamera, &QObject::deleteLater);
+    connect(m_pThreadImageProcess, &QThread::finished, m_pWorkerImageProcess, &QObject::deleteLater);
+    connect(m_plcThread, &QThread::finished, m_pWorkerPlc, &QObject::deleteLater);
     // ==============================================================
     // 6. 启动物理线程 (开启它们内部的事件循环 EventLoop)
     // ==============================================================
     m_pThreadCamera->start();
-    m_pThreadAlgorithm->start();
+    m_pThreadImageProcess->start();
 
     if (m_pWorkerCamera->initCameras(m_workstation_param.master_sn,m_workstation_param.slave_sn,m_workstation_param.camImgWidth,m_workstation_param.camImgHeight))
         m_pWorkerCamera->startGrabbing();
@@ -145,36 +149,19 @@ void Workstation::SettingQThread() {
         onLogReceived("初始化严重故障：请检查相机网络和配置文件中的 SN 号！");
     }
 
-
     //工位类的触发信号绑定trigger的工作函数
     connect(this, &Workstation::start_loop_trigger, p_worker_trigger, &WorkerTrigger::on_doSomething);
-    //trigger的mqtt触发信号绑定mqtt的工作函数
-    // connect(p_worker_trigger, &WorkerTrigger::sig_mqtt_trigger, p_worker_mqtt, &WorkerMQTT::mqtt_public_mydata);
-    //todo:将处理mqtt纠错数据的线程里的槽绑定到mqtt上
-
-
-    connect(m_pWorkerCamera, &WorkerCamera::signalDualChunkReady,
-        m_pWorkerImageProcess, &WorkerImageProcess::onProcessDualChunk,
-        Qt::QueuedConnection);
-
-    connect(m_pWorkerImageProcess, &WorkerImageProcess::signalMeasureFinished,
-        this, &Workstation::onMeasureResultReceived,
-        Qt::QueuedConnection);
 
     //启动线程
-    m_thread_sample.start();
+    // m_thread_sample.start();
     m_thread_trigger.start();
-    m_thread_database.start();
-    m_thread_mqtt.start();
+    // m_thread_database.start();
+    // m_thread_mqtt.start();
 }
-
-
 
 void Workstation::StartTrigger() {
     emit start_loop_trigger();
 }
-
-
 
 // 读取配置文件（从setting.ini加载参数到setting结构体）
 int Workstation::ReadSetting() {
@@ -219,25 +206,25 @@ int Workstation::ReadSetting() {
     m_workstation_param.iouThreshold = setting_ini.getValue(m_iniSessionName, "iouThreshold");
 
     // 3.读取数据库配置
-    m_workstation_param.dbType = setting_ini.getValue(m_iniSessionName, "DbType"); // 数据库类型
-    m_workstation_param.dbConnName = setting_ini.getValue(m_iniSessionName, "dbConnName"); // 连接名称
-    m_workstation_param.dbName = setting_ini.getValue(m_iniSessionName, "DbName"); // 数据库名
-    m_workstation_param.dbHostName = setting_ini.getValue(m_iniSessionName, "HostName"); // 主机地址
-    m_workstation_param.dbHostPort = setting_ini.getValue(m_iniSessionName, "HostPort").toInt(); // 通信端口
-    m_workstation_param.dbUserName = setting_ini.getValue(m_iniSessionName, "UserName"); // 用户名称
-    m_workstation_param.dbUserPwd = setting_ini.getValue(m_iniSessionName, "UserPwd"); // 用户密码
-    m_workstation_param.dbTableName = setting_ini.getValue(m_iniSessionName, "TableName"); // 数据库表名
-    m_workstation_param.dbKeyName = setting_ini.getValue(m_iniSessionName, "KeyName"); // 数据库表的字段名
+    // m_workstation_param.dbType = setting_ini.getValue(m_iniSessionName, "DbType"); // 数据库类型
+    // m_workstation_param.dbConnName = setting_ini.getValue(m_iniSessionName, "dbConnName"); // 连接名称
+    // m_workstation_param.dbName = setting_ini.getValue(m_iniSessionName, "DbName"); // 数据库名
+    // m_workstation_param.dbHostName = setting_ini.getValue(m_iniSessionName, "HostName"); // 主机地址
+    // m_workstation_param.dbHostPort = setting_ini.getValue(m_iniSessionName, "HostPort").toInt(); // 通信端口
+    // m_workstation_param.dbUserName = setting_ini.getValue(m_iniSessionName, "UserName"); // 用户名称
+    // m_workstation_param.dbUserPwd = setting_ini.getValue(m_iniSessionName, "UserPwd"); // 用户密码
+    // m_workstation_param.dbTableName = setting_ini.getValue(m_iniSessionName, "TableName"); // 数据库表名
+    // m_workstation_param.dbKeyName = setting_ini.getValue(m_iniSessionName, "KeyName"); // 数据库表的字段名
 
     // 4.读取MQTT配置
-    m_workstation_param.mqttUse = setting_ini.getValue(m_iniSessionName, "mqtt_use").toInt(); // 是否启用MQTT
-    m_workstation_param.mqttTriggerTime = setting_ini.getValue(m_iniSessionName, "mqtt_trigger_time").toInt(); // 触发时间
-    m_workstation_param.mqttHostname = setting_ini.getValue(m_iniSessionName, "mqtt_hostname"); // 服务器主机名
-    m_workstation_param.mqttPort = setting_ini.getValue(m_iniSessionName, "mqtt_port").toInt(); // 服务器端口
-    m_workstation_param.mqttSaveImagePath = setting_ini.getValue(m_iniSessionName, "mqtt_save_image_path"); // 图像保存路径
-    m_workstation_param.mqttImageCycleNum = setting_ini.getValue(m_iniSessionName, "mqtt_image_cycle_num").toInt();
+    // m_workstation_param.mqttUse = setting_ini.getValue(m_iniSessionName, "mqtt_use").toInt(); // 是否启用MQTT
+    // m_workstation_param.mqttTriggerTime = setting_ini.getValue(m_iniSessionName, "mqtt_trigger_time").toInt(); // 触发时间
+    // m_workstation_param.mqttHostname = setting_ini.getValue(m_iniSessionName, "mqtt_hostname"); // 服务器主机名
+    // m_workstation_param.mqttPort = setting_ini.getValue(m_iniSessionName, "mqtt_port").toInt(); // 服务器端口
+    // m_workstation_param.mqttSaveImagePath = setting_ini.getValue(m_iniSessionName, "mqtt_save_image_path"); // 图像保存路径
+    // m_workstation_param.mqttImageCycleNum = setting_ini.getValue(m_iniSessionName, "mqtt_image_cycle_num").toInt();
     // 图像循环数量
-    m_workstation_param.mqttPublicMsg = setting_ini.getValue(m_iniSessionName, "mqtt_public_msg"); // 收识别错误结果的主题
+    // m_workstation_param.mqttPublicMsg = setting_ini.getValue(m_iniSessionName, "mqtt_public_msg"); // 收识别错误结果的主题
 
     return 0; // 读取成功返回0
 }
@@ -252,13 +239,31 @@ void Workstation::onLogReceived(QString msg)
 // -------------------------------------------------------------------------
 // 槽函数实现：测宽结果接收
 // -------------------------------------------------------------------------
-void Workstation::onMeasureResultReceived(const MeasureResult& result)
+void Workstation::onWidthDataReady(const WidthResult& result)
 {
-    // 当算法线程算完宽度后，数据会来到这里 (仍在主线程中执行)
+    // 1. 格式化数据 (保留两位小数)
+    QString strWidth = QString::number(result.widthValue, 'f', 2);
+    QString strOffset = QString::number(result.centerOffset, 'f', 2);
 
-    // 1. 转发给界面 (frmmain) 去画曲线图和显示数值
+    // 2. 更新 UI (注意：由于 Workstation 在主线程，直接操作 UI 是安全的)
+    // ui->lcdNumber_Width->display(strWidth);
+    // ui->lcdNumber_Offset->display(strOffset);
+
+    // 4. 数据记录与通讯
+    // 将数据压入图表缓存用于绘制曲线
     emit signalMeasureResultToUI(result);
 
-    // 2. 如果以后要存数据库，也是在这里调用 WorkerDatabase 模块
-    // 比如：m_pWorkerDatabase->insertResult(result);
+    // 发送给数据库线程保存 (不要在这里直接写 SQL 语句，避免阻塞主线程)
+    // emit sigSaveToDatabase(QDateTime::currentDateTime(), widthValue, centerOffset);
+
+    // 下发给 PLC 或 二级系统 (L2)
+    // emit sigSendDataToPLC(widthValue, centerOffset, currentStatus);
+}
+
+// 主控接收到图像后，调用 UI 界面的 Halcon 窗口刷新
+void Workstation::onDisplayImage(const HalconCpp::HObject& dispImg) {
+    if(dispImg.IsInitialized()) {
+        // 假设 ui 有一个绑定的 HWND 或 HWindow
+        // HalconCpp::DispObj(dispImg, m_hWindowHandle);
+    }
 }

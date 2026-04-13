@@ -1,6 +1,8 @@
 ﻿#include "workermqtt.h"
 #include "MyApplication.h"
 #include "appconfig.h"
+#include "halconcpp/HalconCpp.h"
+#include "halconcpp/HDevThread.h"
 ///////////////////////////////////////////////////////////////
 bool isHObjectEmpty(const HObject &ho_Obj) {
     //halcon判断HObject是否为空

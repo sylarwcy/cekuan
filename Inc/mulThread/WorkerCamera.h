@@ -43,6 +43,9 @@ signals:
     // [新增] 通知 UI 相机已经准备好，可以按这个尺寸初始化控件了
     void signalCameraReady(int width, int height);
 
+    // 发送双相机同步采到的图像
+    void sigSyncedImagesReady(const HalconCpp::HObject& imgLeft, const HalconCpp::HObject& imgRight);
+
 public:
     static void __stdcall ImageCallBackEx(unsigned char *pData, MV_FRAME_OUT_INFO_EX *pFrameInfo, void *pUser);
 

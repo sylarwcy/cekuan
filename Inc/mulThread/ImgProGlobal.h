@@ -5,8 +5,8 @@
 #ifndef IMGPROGLOBAL_H
 #define IMGPROGLOBAL_H
 
-#include "HotChargingImgPro.h"
-#include "StackerTableImgPro.h"
+// #include "HotChargingImgPro.h"
+#include "DualLineScanWidthImgPro.h"
 // #include "StagingNorthImgPro.h"
 // #include "StagingSouthImgPro.h"
 

@@ -78,14 +78,15 @@ struct DualCameraChunk {
 };
 
 // 2. 算法发给 UI 和 数据库的“测量结果”
-struct MeasureResult {
-    uint64_t frameID;
-    double leftEdgeX;
-    double rightEdgeX;
-    double finalWidth;
-    bool isValid;
+struct WidthResult {
+    bool isOk;              // 测量是否成功
+    double widthValue;      // 最终宽度 (mm)
+    double leftEdgeCol;     // 左边缘图像坐标 (Pixel)
+    double rightEdgeCol;    // 右边缘图像坐标 (Pixel)
+    double centerOffset;    // 跑偏量 (mm)
+    QString errorMsg;       // 错误信息（如果有）
 };
 
 Q_DECLARE_METATYPE(DualCameraChunk)
-Q_DECLARE_METATYPE(MeasureResult)
+Q_DECLARE_METATYPE(WidthResult)
 
