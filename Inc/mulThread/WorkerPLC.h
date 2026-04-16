@@ -10,7 +10,7 @@ class WorkerPLC : public QObject {
     Q_OBJECT
 public:
     // serialNumber 对应当前工位的编号，用于从 shared memory 获取对应数据
-    explicit WorkerPLC(int serialNumber = 0, QObject *parent = nullptr);
+    WorkerPLC(QObject *parent = nullptr);
     ~WorkerPLC();
 
 public slots:

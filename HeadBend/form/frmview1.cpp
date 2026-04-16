@@ -146,7 +146,11 @@ void frmView1::varInit() {
     pApp->pNodeData->camera_1_para.winHandle_ori = winHandle_cam1_ori;
     pApp->pNodeData->camera_2_para.winHandle_ori = winHandle_cam2_ori;
     // pApp->pNodeData->camera_1_para.winHandle_pro = winHandle_cam1_pro;
-    pApp->m_workstationList[0]->m_pWorkerCamera->SetHandle(winHandle_cam1_ori, winHandle_cam2_ori);
+    // pApp->m_workstationList[0]->m_pWorkerCamera->SetHandle(winHandle_cam1_ori, winHandle_cam2_ori);
+
+    connect(pApp->m_workstationList[0], &Workstation::sigForwardToView,
+                this, &frmView1::onUpdateRawImage);
+
     QLOG_INFO() << u8"相机创建完成!";
 
     //防止控件失去焦点时闪烁
@@ -183,6 +187,25 @@ void frmView1::initForm() {
     ui->textBrowser->document()->setMaximumBlockCount(100);
 }
 
+void frmView1::onUpdateRawImage(const DualCameraChunk &chunk) {
+    try {
+        // 渲染左图
+        if (chunk.imgLeft.IsInitialized()) {
+            // 假设你已经有了 Halcon 窗口句柄 m_hWinL
+            // HalconCpp::SetPart(m_hWinL, 0, 0, height, width);
+            HalconCpp::DispObj(chunk.imgLeft, winHandle_cam1_ori);
+        }
+
+        // 渲染右图
+        if (chunk.imgRight.IsInitialized()) {
+            HalconCpp::DispObj(chunk.imgRight, winHandle_cam2_ori);
+        }
+    } catch (const HalconCpp::HException& e) {
+        // 即使画图出错了，也只会在日志里报一下，绝对不会影响后台相机的极速采图
+        QLOG_ERROR() << "UI界面刷新图像失败:" << e.ErrorMessage().Text();
+    }
+}
+
 //用于数据刷新
 void frmView1::refreshDataDisp(void) {
     MyApplication *pApp = (MyApplication *) qApp;
@@ -192,7 +215,7 @@ void frmView1::refreshDataDisp(void) {
     //监控线程循环时间
     for (int i = 0; i < pApp->m_workstationList[0]->m_pWorkerCamera->m_camList.size(); ++i)
         ui->lineEdit_camera_num_front->setText(
-            QString("%1").arg(pApp->m_workstationList[0]->m_pWorkerCamera->m_camList[i]->thread_cycle_ms));
+            QString("%1").arg(pApp->m_workstationList[0]->m_pWorkerCamera->m_thread_cycle_ms));
 
     ui->lineEdit_disp_num->setText(QString("%1").arg(disp_num++));
 

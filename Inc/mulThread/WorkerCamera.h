@@ -21,9 +21,13 @@ public:
 
     bool initCameras(const QString& leftSN, const QString& rightSN,  const int imgWidth, const int imgHeight);
 
+    // void SetHandle(HalconCpp::HTuple &ori, HalconCpp::HTuple &pro);
+
     void startGrabbing();
 
     void stopGrabbing();
+
+    bool HtupleIsEmpty(HalconCpp::HTuple &value);
 
 public slots:
     void onUpdateSpeedFromPLC(double speed_m_s);
@@ -34,17 +38,18 @@ public slots:
     void onTryReconnect();
 
 signals:
-    void signalDualChunkReady(const DualCameraChunk &chunk);
+    void sigImageReadyToAlg(const DualCameraChunk &chunk);
+    void sigDisplayRawImage(const DualCameraChunk &chunk);
 
     void signalCameraLog(QString msg);
 
     void signalExceptionFired(int camIndex);// [新增] 底层异常抛出信号
 
     // [新增] 通知 UI 相机已经准备好，可以按这个尺寸初始化控件了
-    void signalCameraReady(int width, int height);
+    void sigImageReadyTOUI(int width, int height);
 
     // 发送双相机同步采到的图像
-    void sigSyncedImagesReady(const HalconCpp::HObject& imgLeft, const HalconCpp::HObject& imgRight);
+    // void sigSyncedImagesReady(const HalconCpp::HObject& imgLeft, const HalconCpp::HObject& imgRight);
 
 public:
     static void __stdcall ImageCallBackEx(unsigned char *pData, MV_FRAME_OUT_INFO_EX *pFrameInfo, void *pUser);
@@ -54,11 +59,13 @@ public:
 
     void processFrame(unsigned char *pData, MV_FRAME_OUT_INFO_EX *pFrameInfo, int camIndex);
 
-private:
     void configureMasterSlave();
 
     void *m_hDevLeft;
     void *m_hDevRight;
+
+    QList<void*> m_camList;
+    int m_thread_cycle_ms=200;
 
     CamContext m_ctxLeft;
     CamContext m_ctxRight;
@@ -68,6 +75,8 @@ private:
     int m_imgWidth;
     int m_imgHeight;
     float m_lineRate = 500.0f;
+
+    // HalconCpp::HTuple m_winHandle_ori, m_winHandle_pro;
 
     QMutex m_mutex;
     std::map<uint64_t, DualCameraChunk> m_bufferMap;

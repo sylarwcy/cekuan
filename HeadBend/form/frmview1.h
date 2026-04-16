@@ -60,6 +60,8 @@ private slots:
     void on_checkBox_test_img_clicked(bool checked);
     void on_checkBox_test_video_clicked(bool checked);
     void on_pushButton_load_para_clicked();
+
+    void onUpdateRawImage(const DualCameraChunk &chunk);
 };
 
 #endif // FRMVIEW1_H

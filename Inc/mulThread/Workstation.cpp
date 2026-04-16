@@ -120,13 +120,17 @@ void Workstation::SettingQThread() {
     // ==============================================================
 
     // [神经A]: 海康底层拼好图 -> 扔给 Halcon 算法大脑
-    connect(m_pWorkerCamera, &WorkerCamera::signalDualChunkReady,
-            m_pWorkerImageProcess, &WorkerImageProcess::onSyncedImagesReady,
+    connect(m_pWorkerCamera, &WorkerCamera::sigImageReadyToAlg,
+            m_pWorkerImageProcess, &WorkerImageProcess::imgProcessMeasure,
+            Qt::QueuedConnection);
+
+    connect(m_pWorkerCamera, &WorkerCamera::sigDisplayRawImage,
+            this, &Workstation::onDisplayImage,
             Qt::QueuedConnection);
 
     // [神经B]: Halcon 算法算完宽度 -> 扔给主界面 UI 进行曲线渲染和存库
-    connect(m_pWorkerImageProcess, &WorkerImageProcess::resultReady,
-            this, &Workstation::onWidthDataReady,
+    connect(m_pWorkerImageProcess, &WorkerImageProcess::sigMeasureReady,
+            this, &Workstation::onProcessResult,
             Qt::QueuedConnection);
 
     // [神经C]: 收集底层日志 -> 扔给主界面显示
@@ -239,7 +243,7 @@ void Workstation::onLogReceived(QString msg)
 // -------------------------------------------------------------------------
 // 槽函数实现：测宽结果接收
 // -------------------------------------------------------------------------
-void Workstation::onWidthDataReady(const WidthResult& result)
+void Workstation::onProcessResult(const WidthResult& result)
 {
     // 1. 格式化数据 (保留两位小数)
     QString strWidth = QString::number(result.widthValue, 'f', 2);
@@ -251,7 +255,7 @@ void Workstation::onWidthDataReady(const WidthResult& result)
 
     // 4. 数据记录与通讯
     // 将数据压入图表缓存用于绘制曲线
-    emit signalMeasureResultToUI(result);
+    emit sigSendDataToUI(result);
 
     // 发送给数据库线程保存 (不要在这里直接写 SQL 语句，避免阻塞主线程)
     // emit sigSaveToDatabase(QDateTime::currentDateTime(), widthValue, centerOffset);
@@ -260,10 +264,25 @@ void Workstation::onWidthDataReady(const WidthResult& result)
     // emit sigSendDataToPLC(widthValue, centerOffset, currentStatus);
 }
 
+void Workstation::onProcessError(const QString& errorMsg) {
+    // 1. 打印后台日志
+    qWarning() << "[中枢报警] 算法处理异常:" << errorMsg;
+
+    // 2. 发送给界面显示
+    onLogReceived("算法异常: " + errorMsg);
+
+    // 3. (可选) 如果你已经接好了 PLC，这里可以给 PLC 发送故障状态码
+    // emit sigSendDataToPLC(0.0, 0.0, 4); // 假设 4 代表算法/相机故障
+}
+
 // 主控接收到图像后，调用 UI 界面的 Halcon 窗口刷新
-void Workstation::onDisplayImage(const HalconCpp::HObject& dispImg) {
-    if(dispImg.IsInitialized()) {
-        // 假设 ui 有一个绑定的 HWND 或 HWindow
-        // HalconCpp::DispObj(dispImg, m_hWindowHandle);
+void Workstation::onDisplayImage(const DualCameraChunk &chunk) {
+    // 这里可以加一个简单的 UI 刷新频率控制 (例如每秒最多刷新 10 次，防止人眼看不清且浪费性能)
+    static QElapsedTimer timer;
+    if (!timer.isValid()) timer.start();
+
+    if (timer.elapsed() > 100) { // 限制 10Hz 刷新率
+        emit sigForwardToView(chunk);
+        timer.restart();
     }
 }

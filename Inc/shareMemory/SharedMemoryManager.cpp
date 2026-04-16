@@ -3,7 +3,7 @@
 //
 
 #include "SharedMemoryManager.h"
-#include "QsLogDisableForThisFile.h"
+#include "QsLog.h"
 
 SharedMemoryManager::SharedMemoryManager(const QList<Workstation *> &workstationList) {
     m_workstationList = workstationList;

@@ -10,7 +10,7 @@ bool isHObjectEmpty(const HObject &ho_Obj) {
 
     try {
         GenEmptyObj(&ho_Null);
-    } catch (HException &except) {
+    } catch (HalconCpp::HException &except) {
         //HALCON error #2036: could not find license file
         QLOG_INFO() << except.ErrorMessage().Text();
         return true;

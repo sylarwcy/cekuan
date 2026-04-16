@@ -3,7 +3,7 @@
 //
 #pragma once
 
-#include <HObject.h>
+#include "halconcpp/HalconCpp.h"
 
 struct WorkStation_DATA
 {

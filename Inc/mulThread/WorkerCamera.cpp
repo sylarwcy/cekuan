@@ -12,6 +12,9 @@ WorkerCamera::WorkerCamera(QObject *parent) : QObject(parent),
 
     // [新增] 将底层异常信号绑定到本类的处理槽上 (跨线程安全)
     connect(this, &WorkerCamera::signalExceptionFired, this, &WorkerCamera::onCameraDisconnected, Qt::QueuedConnection);
+
+    m_camList.append(m_hDevLeft);
+    m_camList.append(m_hDevRight);
 }
 
 WorkerCamera::~WorkerCamera() {
@@ -20,6 +23,11 @@ WorkerCamera::~WorkerCamera() {
     if(m_hDevLeft) { MV_CC_DestroyHandle(m_hDevLeft); m_hDevLeft = NULL; }
     if(m_hDevRight) { MV_CC_DestroyHandle(m_hDevRight); m_hDevRight = NULL; }
 }
+
+// void WorkerCamera::SetHandle(HalconCpp::HTuple &ori, HalconCpp::HTuple &pro) {
+//     m_winHandle_ori = ori;
+//     m_winHandle_pro = pro;
+// }
 
 bool WorkerCamera::initCameras(const QString& leftSN, const QString& rightSN,  const int imgWidth, const int imgHeight)
 {
@@ -89,7 +97,7 @@ bool WorkerCamera::initCameras(const QString& leftSN, const QString& rightSN,  c
     MV_CC_GetIntValue(m_hDevLeft, "Width", &stIntParam);
     int camWidth = stIntParam.nCurValue;
 
-    emit signalCameraReady(camWidth, m_imgHeight);
+    emit sigImageReadyTOUI(camWidth, m_imgHeight);
     emit signalCameraLog(QString("初始化完毕: 画幅 %1 x %2").arg(camWidth).arg(m_imgHeight));
     return true;
 }
@@ -146,45 +154,70 @@ void WorkerCamera::processFrame(unsigned char* pData, MV_FRAME_OUT_INFO_EX* pFra
     // 1. 获取网络包里的宏观帧号
     uint64_t frameID = pFrameInfo->nFrameNum;
 
-    // 2. 直接从海康的裸内存生成 Halcon 图像对象！
-    // GenImage1 会在 Halcon 内存池中深拷贝这块内存，极度安全，不怕海康释放 pData
+    // 2. 生成 Halcon 图像对象 (放在锁外面，不占用宝贵的互斥时间)
     HalconCpp::HObject ho_Image;
-    HalconCpp::GenImage1(&ho_Image, "byte", pFrameInfo->nWidth, pFrameInfo->nHeight, (Hlong)pData);
-
-    // 3. 进入帧配对池
-    m_mutex.lock();
-    if (m_bufferMap.find(frameID) == m_bufferMap.end()) {
-        DualCameraChunk newChunk;
-        newChunk.frameID = frameID;
-        newChunk.height = pFrameInfo->nHeight;
-        m_bufferMap[frameID] = newChunk;
+    try {
+        HalconCpp::GenImage1(&ho_Image, "byte", pFrameInfo->nWidth, pFrameInfo->nHeight, (Hlong)pData);
+    } catch (const HalconCpp::HException& e) {
+        qWarning() << "[WorkerCamera] GenImage1 异常丢帧:" << e.ErrorMessage().Text();
+        return; // 生成失败直接退出，不影响系统
     }
 
-    // 4. 将 HObject 赋值进缓存池，并改变到达标志位
-    if (camIndex == 0) {
-        m_bufferMap[frameID].imgLeft = ho_Image;
-        m_bufferMap[frameID].hasLeft = true;
-    } else {
-        m_bufferMap[frameID].imgRight = ho_Image;
-        m_bufferMap[frameID].hasRight = true;
+    DualCameraChunk readyChunk; // 用于搬运配对成功的包裹
+    bool isPairReady = false;
+
+    // ==========================================================
+    // 【核心修复】：使用 QMutexLocker 划定极小作用域的临界区
+    // 好处：无论发生什么(哪怕抛出异常或return)，离开大括号时自动解锁！绝对不发生死锁。
+    // ==========================================================
+    {
+        QMutexLocker locker(&m_mutex);
+
+        // 3. 查单与建档
+        if (m_bufferMap.find(frameID) == m_bufferMap.end()) {
+            DualCameraChunk newChunk;
+            newChunk.frameID = frameID;
+            newChunk.height = pFrameInfo->nHeight;
+            m_bufferMap[frameID] = newChunk;
+        }
+
+        // 4. 存入对应相机的图像
+        if (camIndex == 0) {
+            m_bufferMap[frameID].imgLeft = ho_Image;
+            m_bufferMap[frameID].hasLeft = true;
+        } else {
+            m_bufferMap[frameID].imgRight = ho_Image;
+            m_bufferMap[frameID].hasRight = true;
+        }
+
+        // 5. 检查是否配对成功
+        if (m_bufferMap[frameID].hasLeft && m_bufferMap[frameID].hasRight) {
+            // 【关键】：把数据拷贝出来，立刻清理 map
+            readyChunk = m_bufferMap[frameID];
+            isPairReady = true;
+            m_bufferMap.erase(frameID);
+        }
+
+        // 6. 防爆池机制 (防止单相机断线导致内存泄漏)
+        if (m_bufferMap.size() > 10) {
+            m_bufferMap.clear();
+            qWarning() << "[WorkerCamera] 缓存池溢出，已强制清空孤儿帧！";
+        }
+    } // <--- 运行到这里，locker 超出生命周期，互斥锁自动安全释放！
+
+    // ==========================================================
+    // 临界区之外：处理耗时操作和跨线程通讯
+    // ==========================================================
+
+    if (isPairReady) {
+        // 1. 发给算法线程
+        emit sigImageReadyToAlg(readyChunk);
+
+        // 2. 【修复 UI 冲突】：这里绝对不能直接调用 DispObj！
+        // 如果你需要显示原始图像，应该增加一个发给主界面的信号：
+        emit sigDisplayRawImage(readyChunk);
+        // 让主控 Workstation 在 GUI 主线程中去调用 DispObj 显示。
     }
-
-    // 5. 检查左右兄弟是否都到齐了？
-    if (m_bufferMap[frameID].hasLeft && m_bufferMap[frameID].hasRight) {
-
-        // 完美对齐！发射包含了 HObject 的包裹给算法线程
-        emit signalDualChunkReady(m_bufferMap[frameID]);
-
-        // 从 Map 中抹除，HObject 自身的智能指针会自动管理生命周期
-        m_bufferMap.erase(frameID);
-    }
-
-    // 防爆池机制：超过 10 帧未配对成功的孤儿，直接清空
-    if (m_bufferMap.size() > 10) {
-        m_bufferMap.clear();
-    }
-    
-    m_mutex.unlock();
 }
 
 // ==============================================================
@@ -300,4 +333,11 @@ void WorkerCamera::onTryReconnect()
             }
         }
     }
+}
+
+bool WorkerCamera::HtupleIsEmpty(HalconCpp::HTuple &value) {
+    HalconCpp::HTuple length;
+    TupleLength(value, &length);
+
+    return length.I() == 0;
 }

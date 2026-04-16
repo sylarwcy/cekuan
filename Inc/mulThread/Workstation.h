@@ -29,7 +29,6 @@ public:
     int m_serialNumber;       //工位序号
     WorkStation_DATA m_workstation_param; //工位参数
 
-private:
     // ===== 业务工作类 =====
     WorkerCamera* m_pWorkerCamera;
     WorkerImageProcess* m_pWorkerImageProcess;
@@ -58,9 +57,9 @@ public slots:
     void onLogReceived(QString msg);
 
     // 接收算法线程算完的结果
-    void onWidthDataReady(const WidthResult& result);
+    void onProcessResult(const WidthResult& result);
 
-    void onDisplayImage(const HalconCpp::HObject& dispImg);
+    void onDisplayImage(const DualCameraChunk &chunk);
 
     // 接收算法处理异常（如找不到边缘、Halcon算子报错等）
     void onProcessError(const QString& errorMsg);
@@ -71,8 +70,10 @@ signals:
     // 将底层发来的日志，继续向上转发给界面 (frmmain)
     void signalLogToUI(QString msg);
 
+    void sigForwardToView(const DualCameraChunk& chunk);
+
     // 将算法算出的宽度结果，向上转发给界面画曲线
-    void signalMeasureResultToUI(const WidthResult& result);
+    void sigSendDataToUI(const WidthResult& result);
 
     void sigSendDataToPLC(double width, double offset, int statusFlag);
 };
