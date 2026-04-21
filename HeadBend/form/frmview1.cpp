@@ -93,17 +93,17 @@ void frmView1::resizeEvent(QResizeEvent *event) {
         height = ui->gView_front_ori->height();
         SetWindowExtents(winHandle_cam1_ori, 0, 0, width, height);
 
-        width = ui->gView_back_pro->width();
-        height = ui->gView_back_pro->height();
+        width = ui->gView_front_pro->width();
+        height = ui->gView_front_pro->height();
         SetWindowExtents(winHandle_cam2_pro, 0, 0, width, height);
 
         width = ui->gView_front_pro->width();
         height = ui->gView_front_pro->height();
         SetWindowExtents(winHandle_cam1_pro, 0, 0, width, height);
 
-        width = ui->gView_back_pro->width();
-        height = ui->gView_back_pro->height();
-        SetWindowExtents(winHandle_cam2_pro, 0, 0, width, height);
+        // width = ui->gView_back_pro->width();
+        // height = ui->gView_back_pro->height();
+        // SetWindowExtents(winHandle_cam2_pro, 0, 0, width, height);
     }
 }
 

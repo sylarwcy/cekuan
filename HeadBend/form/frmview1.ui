@@ -144,272 +144,14 @@
              <number>0</number>
             </property>
             <item>
-             <widget class="QFrame" name="frame_4">
-              <property name="sizePolicy">
-               <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-                <horstretch>0</horstretch>
-                <verstretch>0</verstretch>
-               </sizepolicy>
-              </property>
-              <property name="minimumSize">
-               <size>
-                <width>480</width>
-                <height>0</height>
-               </size>
-              </property>
-              <property name="maximumSize">
-               <size>
-                <width>480</width>
-                <height>16777215</height>
-               </size>
-              </property>
-              <property name="frameShape">
-               <enum>QFrame::StyledPanel</enum>
-              </property>
-              <property name="frameShadow">
-               <enum>QFrame::Raised</enum>
-              </property>
-              <layout class="QVBoxLayout" name="verticalLayout">
-               <property name="spacing">
-                <number>1</number>
-               </property>
-               <property name="leftMargin">
-                <number>0</number>
-               </property>
-               <property name="topMargin">
-                <number>1</number>
-               </property>
-               <property name="rightMargin">
-                <number>0</number>
-               </property>
-               <property name="bottomMargin">
-                <number>0</number>
-               </property>
-               <item>
-                <widget class="QWidget" name="widget" native="true">
-                 <property name="sizePolicy">
-                  <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-                   <horstretch>0</horstretch>
-                   <verstretch>0</verstretch>
-                  </sizepolicy>
-                 </property>
-                 <property name="minimumSize">
-                  <size>
-                   <width>0</width>
-                   <height>0</height>
-                  </size>
-                 </property>
-                 <property name="maximumSize">
-                  <size>
-                   <width>16777215</width>
-                   <height>16777215</height>
-                  </size>
-                 </property>
-                 <layout class="QVBoxLayout" name="verticalLayout_3">
-                  <property name="spacing">
-                   <number>1</number>
-                  </property>
-                  <property name="leftMargin">
-                   <number>0</number>
-                  </property>
-                  <property name="topMargin">
-                   <number>0</number>
-                  </property>
-                  <property name="rightMargin">
-                   <number>0</number>
-                  </property>
-                  <property name="bottomMargin">
-                   <number>0</number>
-                  </property>
-                  <item>
-                   <widget class="QGraphicsView" name="gView_front_ori"/>
-                  </item>
-                 </layout>
-                </widget>
-               </item>
-               <item>
-                <widget class="QWidget" name="widget_2" native="true">
-                 <property name="sizePolicy">
-                  <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-                   <horstretch>0</horstretch>
-                   <verstretch>0</verstretch>
-                  </sizepolicy>
-                 </property>
-                 <layout class="QVBoxLayout" name="verticalLayout_11">
-                  <property name="spacing">
-                   <number>1</number>
-                  </property>
-                  <property name="leftMargin">
-                   <number>0</number>
-                  </property>
-                  <property name="topMargin">
-                   <number>0</number>
-                  </property>
-                  <property name="rightMargin">
-                   <number>0</number>
-                  </property>
-                  <property name="bottomMargin">
-                   <number>0</number>
-                  </property>
-                  <item>
-                   <widget class="QGraphicsView" name="gView_back_ori"/>
-                  </item>
-                 </layout>
-                </widget>
-               </item>
-              </layout>
-             </widget>
+             <widget class="QGraphicsView" name="gView_front_ori"/>
             </item>
             <item>
-             <widget class="QFrame" name="frame_7">
-              <property name="sizePolicy">
-               <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-                <horstretch>0</horstretch>
-                <verstretch>0</verstretch>
-               </sizepolicy>
-              </property>
-              <property name="frameShape">
-               <enum>QFrame::StyledPanel</enum>
-              </property>
-              <property name="frameShadow">
-               <enum>QFrame::Raised</enum>
-              </property>
-              <layout class="QVBoxLayout" name="verticalLayout_2">
-               <property name="spacing">
-                <number>1</number>
-               </property>
-               <property name="leftMargin">
-                <number>0</number>
-               </property>
-               <property name="topMargin">
-                <number>1</number>
-               </property>
-               <property name="rightMargin">
-                <number>0</number>
-               </property>
-               <property name="bottomMargin">
-                <number>0</number>
-               </property>
-               <item>
-                <widget class="QWidget" name="widget_3" native="true">
-                 <property name="sizePolicy">
-                  <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-                   <horstretch>0</horstretch>
-                   <verstretch>0</verstretch>
-                  </sizepolicy>
-                 </property>
-                 <property name="minimumSize">
-                  <size>
-                   <width>0</width>
-                   <height>0</height>
-                  </size>
-                 </property>
-                 <property name="maximumSize">
-                  <size>
-                   <width>16777215</width>
-                   <height>16777215</height>
-                  </size>
-                 </property>
-                 <layout class="QVBoxLayout" name="verticalLayout_8">
-                  <property name="spacing">
-                   <number>1</number>
-                  </property>
-                  <property name="leftMargin">
-                   <number>0</number>
-                  </property>
-                  <property name="topMargin">
-                   <number>0</number>
-                  </property>
-                  <property name="rightMargin">
-                   <number>0</number>
-                  </property>
-                  <property name="bottomMargin">
-                   <number>0</number>
-                  </property>
-                  <item>
-                   <widget class="QGraphicsView" name="gView_front_pro"/>
-                  </item>
-                 </layout>
-                </widget>
-               </item>
-               <item>
-                <widget class="QWidget" name="widget_4" native="true">
-                 <property name="sizePolicy">
-                  <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-                   <horstretch>0</horstretch>
-                   <verstretch>0</verstretch>
-                  </sizepolicy>
-                 </property>
-                 <layout class="QVBoxLayout" name="verticalLayout_12">
-                  <property name="spacing">
-                   <number>1</number>
-                  </property>
-                  <property name="leftMargin">
-                   <number>0</number>
-                  </property>
-                  <property name="topMargin">
-                   <number>0</number>
-                  </property>
-                  <property name="rightMargin">
-                   <number>0</number>
-                  </property>
-                  <property name="bottomMargin">
-                   <number>0</number>
-                  </property>
-                  <item>
-                   <widget class="QGraphicsView" name="gView_back_pro"/>
-                  </item>
-                 </layout>
-                </widget>
-               </item>
-              </layout>
-             </widget>
+             <widget class="QGraphicsView" name="gView_back_ori"/>
             </item>
-           </layout>
-          </widget>
-         </item>
-         <item>
-          <widget class="QFrame" name="frame_3">
-           <property name="sizePolicy">
-            <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-             <horstretch>0</horstretch>
-             <verstretch>0</verstretch>
-            </sizepolicy>
-           </property>
-           <property name="minimumSize">
-            <size>
-             <width>0</width>
-             <height>200</height>
-            </size>
-           </property>
-           <property name="maximumSize">
-            <size>
-             <width>16777215</width>
-             <height>200</height>
-            </size>
-           </property>
-           <property name="frameShape">
-            <enum>QFrame::Panel</enum>
-           </property>
-           <property name="frameShadow">
-            <enum>QFrame::Raised</enum>
-           </property>
-           <layout class="QVBoxLayout" name="verticalLayout_6">
-            <property name="spacing">
-             <number>1</number>
-            </property>
-            <property name="leftMargin">
-             <number>0</number>
-            </property>
-            <property name="topMargin">
-             <number>1</number>
-            </property>
-            <property name="rightMargin">
-             <number>0</number>
-            </property>
-            <property name="bottomMargin">
-             <number>0</number>
-            </property>
+            <item>
+             <widget class="QGraphicsView" name="gView_front_pro"/>
+            </item>
             <item>
              <widget class="QFrame" name="frame_6">
               <property name="sizePolicy">
@@ -439,8 +181,8 @@
               <widget class="QCheckBox" name="checkBox_test_video">
                <property name="geometry">
                 <rect>
-                 <x>260</x>
-                 <y>60</y>
+                 <x>20</x>
+                 <y>220</y>
                  <width>91</width>
                  <height>20</height>
                 </rect>
@@ -452,8 +194,8 @@
               <widget class="QLabel" name="label">
                <property name="geometry">
                 <rect>
-                 <x>369</x>
-                 <y>42</y>
+                 <x>29</x>
+                 <y>287</y>
                  <width>81</width>
                  <height>20</height>
                 </rect>
@@ -533,8 +275,8 @@
                </property>
                <property name="geometry">
                 <rect>
-                 <x>260</x>
-                 <y>20</y>
+                 <x>20</x>
+                 <y>180</y>
                  <width>81</width>
                  <height>20</height>
                 </rect>
@@ -546,8 +288,8 @@
               <widget class="QCheckBox" name="checkBox_test_img">
                <property name="geometry">
                 <rect>
-                 <x>260</x>
-                 <y>40</y>
+                 <x>20</x>
+                 <y>200</y>
                  <width>91</width>
                  <height>20</height>
                 </rect>
@@ -559,8 +301,8 @@
               <widget class="QLineEdit" name="lineEdit_disp_num">
                <property name="geometry">
                 <rect>
-                 <x>449</x>
-                 <y>17</y>
+                 <x>109</x>
+                 <y>262</y>
                  <width>71</width>
                  <height>21</height>
                 </rect>
@@ -569,8 +311,8 @@
               <widget class="QLineEdit" name="lineEdit_camera_num_front">
                <property name="geometry">
                 <rect>
-                 <x>450</x>
-                 <y>41</y>
+                 <x>110</x>
+                 <y>286</y>
                  <width>71</width>
                  <height>21</height>
                 </rect>
@@ -618,8 +360,8 @@
               <widget class="QLabel" name="label_2">
                <property name="geometry">
                 <rect>
-                 <x>369</x>
-                 <y>17</y>
+                 <x>29</x>
+                 <y>262</y>
                  <width>81</width>
                  <height>16</height>
                 </rect>
@@ -631,8 +373,8 @@
               <widget class="QLabel" name="label_3">
                <property name="geometry">
                 <rect>
-                 <x>369</x>
-                 <y>66</y>
+                 <x>29</x>
+                 <y>311</y>
                  <width>81</width>
                  <height>20</height>
                 </rect>
@@ -644,8 +386,8 @@
               <widget class="QLineEdit" name="lineEdit_camera_num_back">
                <property name="geometry">
                 <rect>
-                 <x>450</x>
-                 <y>65</y>
+                 <x>110</x>
+                 <y>310</y>
                  <width>71</width>
                  <height>21</height>
                 </rect>
@@ -654,8 +396,8 @@
               <widget class="QPushButton" name="pushButton_load_para">
                <property name="geometry">
                 <rect>
-                 <x>250</x>
-                 <y>140</y>
+                 <x>130</x>
+                 <y>190</y>
                  <width>91</width>
                  <height>31</height>
                 </rect>
@@ -663,6 +405,56 @@
                <property name="text">
                 <string>加载环境参数</string>
                </property>
+              </widget>
+              <widget class="QTabWidget" name="tabWidget_2">
+               <property name="geometry">
+                <rect>
+                 <x>10</x>
+                 <y>330</y>
+                 <width>248</width>
+                 <height>111</height>
+                </rect>
+               </property>
+               <property name="minimumSize">
+                <size>
+                 <width>0</width>
+                 <height>0</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>16777215</width>
+                 <height>16777215</height>
+                </size>
+               </property>
+               <property name="currentIndex">
+                <number>0</number>
+               </property>
+               <widget class="QWidget" name="tab_2">
+                <attribute name="title">
+                 <string>采集PLC数据</string>
+                </attribute>
+                <layout class="QVBoxLayout" name="verticalLayout_9">
+                 <property name="spacing">
+                  <number>1</number>
+                 </property>
+                 <property name="leftMargin">
+                  <number>0</number>
+                 </property>
+                 <property name="topMargin">
+                  <number>1</number>
+                 </property>
+                 <property name="rightMargin">
+                  <number>0</number>
+                 </property>
+                 <property name="bottomMargin">
+                  <number>0</number>
+                 </property>
+                 <item>
+                  <widget class="QTableView" name="tableView_from_plc"/>
+                 </item>
+                </layout>
+               </widget>
               </widget>
              </widget>
             </item>
@@ -756,94 +548,6 @@
             <property name="bottomMargin">
              <number>0</number>
             </property>
-            <item>
-             <widget class="QTabWidget" name="tabWidget_2">
-              <property name="minimumSize">
-               <size>
-                <width>0</width>
-                <height>0</height>
-               </size>
-              </property>
-              <property name="maximumSize">
-               <size>
-                <width>16777215</width>
-                <height>16777215</height>
-               </size>
-              </property>
-              <property name="currentIndex">
-               <number>0</number>
-              </property>
-              <widget class="QWidget" name="tab_2">
-               <attribute name="title">
-                <string>采集PLC数据</string>
-               </attribute>
-               <layout class="QVBoxLayout" name="verticalLayout_9">
-                <property name="spacing">
-                 <number>1</number>
-                </property>
-                <property name="leftMargin">
-                 <number>0</number>
-                </property>
-                <property name="topMargin">
-                 <number>1</number>
-                </property>
-                <property name="rightMargin">
-                 <number>0</number>
-                </property>
-                <property name="bottomMargin">
-                 <number>0</number>
-                </property>
-                <item>
-                 <widget class="QTableView" name="tableView_from_plc"/>
-                </item>
-               </layout>
-              </widget>
-             </widget>
-            </item>
-            <item>
-             <widget class="QTabWidget" name="tabWidget_3">
-              <property name="minimumSize">
-               <size>
-                <width>0</width>
-                <height>0</height>
-               </size>
-              </property>
-              <property name="maximumSize">
-               <size>
-                <width>16777215</width>
-                <height>16777215</height>
-               </size>
-              </property>
-              <property name="currentIndex">
-               <number>0</number>
-              </property>
-              <widget class="QWidget" name="tab_4">
-               <attribute name="title">
-                <string>设定PLC数据</string>
-               </attribute>
-               <layout class="QVBoxLayout" name="verticalLayout_10">
-                <property name="spacing">
-                 <number>1</number>
-                </property>
-                <property name="leftMargin">
-                 <number>0</number>
-                </property>
-                <property name="topMargin">
-                 <number>1</number>
-                </property>
-                <property name="rightMargin">
-                 <number>0</number>
-                </property>
-                <property name="bottomMargin">
-                 <number>0</number>
-                </property>
-                <item>
-                 <widget class="QTableView" name="tableView_to_plc"/>
-                </item>
-               </layout>
-              </widget>
-             </widget>
-            </item>
            </layout>
           </widget>
          </item>
