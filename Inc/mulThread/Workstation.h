@@ -11,6 +11,7 @@
 #include "WorkerImageProcess.h"
 #include "WorkerPLC.h"
 
+
 class Workstation : public QObject
 {
   Q_OBJECT
@@ -51,6 +52,12 @@ public:
     // QThread m_thread_mqtt;
     // WorkerMQTT *p_worker_mqtt;
 
+    // ----------------- 新增/修改的测宽核心线程句柄 -----------------
+    WorkerCamera* m_workerCameraFront;  // 第 1 个线阵相机 (对应 front_ori)
+    WorkerCamera* m_workerCameraBack ;  // 第 2 个线阵相机 (对应 back_ori)
+
+    WorkerImageProcess* m_workerImageProcess; // 图像处理与拼接算法线程 (对应 front_pro)
+    // -----------------------------------------------------------
 
 public slots:
     // 接收底层相机的日志
@@ -65,6 +72,11 @@ public slots:
     void onProcessError(const QString& errorMsg);
 
 signals:
+    // 可能会叫这些名字：
+    // void sendImage(int stationId, const QImage &img);
+    // void signal_imageReady(int stationId, const QImage &img);
+    // void updateImage(int stationId, const QImage &img);
+    // void signal_SendHObject(...); // 如果传的是Halcon图像
     //界面刷新开始
     void start_loop_trigger();
     // 将底层发来的日志，继续向上转发给界面 (frmmain)

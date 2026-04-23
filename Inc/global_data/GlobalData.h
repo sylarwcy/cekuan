@@ -339,6 +339,7 @@ public:
     struct Camera_Init_Para camera_1_para;  // 前相机初始化参数
     struct Camera_Init_Para camera_2_para;   // 后相机初始化参数
 
+
     // FINISH_SCHEDULE finishSave;    // 保存的轧制计划数据
     // FINISH_SCHEDULE finishAct;     // 实际的轧制计划数据
 };

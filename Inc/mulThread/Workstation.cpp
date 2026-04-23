@@ -41,6 +41,15 @@ Workstation::~Workstation() {
     if (m_pThreadCamera)       { delete m_pThreadCamera; }
     if (m_pThreadImageProcess)    { delete m_pThreadImageProcess; }
 
+
+    // 1. 实例化前相机（传入相机 ID = 0）
+    m_workerCameraFront = new WorkerCamera(0);
+
+    // // 2. 实例化后相机（传入相机 ID = 1）
+    // m_workerCameraBack = new WorkerCamera(1);
+
+    // 3. 实例化图像处理线程（用于执行你的双线扫拼接与测宽算法）
+    m_workerImageProcess = new WorkerImageProcess(this);
     // //触发进程停止
     // pApp->isStopTrigger = true;
     // m_thread_trigger.quit();
@@ -53,6 +62,8 @@ Workstation::~Workstation() {
     // m_thread_database.wait();
     //
     // Sleep(100);
+    qRegisterMetaType<WidthResult>("WidthResult");
+    qRegisterMetaType<DualCameraChunk>("DualCameraChunk");
 }
 
 void Workstation::Init(QString iniSessionName) {

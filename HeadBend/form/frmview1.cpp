@@ -38,8 +38,8 @@ frmView1::frmView1(QWidget *parent) : QWidget(parent),
     model_from_plc->setItem(3, 0, new QStandardItem("加热炉冷检"));
 
     //单选
-    ui->tableView_to_plc->setSelectionMode(QAbstractItemView::SingleSelection);
-    ui->tableView_to_plc->setSelectionBehavior(QAbstractItemView::SelectRows);
+    // ui->tableView_to_plc->setSelectionMode(QAbstractItemView::SingleSelection);
+    // ui->tableView_to_plc->setSelectionBehavior(QAbstractItemView::SelectRows);
 
     //tableView_para
     model_to_plc = new QStandardItemModel(this);
@@ -47,22 +47,22 @@ frmView1::frmView1(QWidget *parent) : QWidget(parent),
     for (int i = 0; i < pApp->m_workstationList.size(); ++i)
         model_to_plc->setHorizontalHeaderItem(
             i + 1, new QStandardItem(pApp->m_workstationList[i]->m_location.right(5)));
-    ui->tableView_to_plc->setModel(model_to_plc);
+    // ui->tableView_to_plc->setModel(model_to_plc);
 
-    ui->tableView_to_plc->setColumnWidth(0, 100);
-    for (int i = 1; i <= pApp->m_workstationList.size(); ++i)
-        ui->tableView_to_plc->setColumnWidth(i, 50);
+    // ui->tableView_to_plc->setColumnWidth(0, 100);
+    // for (int i = 1; i <= pApp->m_workstationList.size(); ++i)
+    //     ui->tableView_to_plc->setColumnWidth(i, 50);
 
-    model_to_plc->setItem(0, 0, new QStandardItem("心跳"));
-    model_to_plc->setItem(1, 0, new QStandardItem("是否有钢板"));
-    model_to_plc->setItem(2, 0, new QStandardItem("头部位置"));
-    model_to_plc->setItem(3, 0, new QStandardItem("板号"));
-    model_to_plc->setItem(4, 0, new QStandardItem("图片名"));
-    model_to_plc->setItem(5, 0, new QStandardItem("触发信号"));
-    model_to_plc->setItem(6, 0, new QStandardItem("相机故障"));
-    model_to_plc->setItem(7, 0, new QStandardItem("备用1"));
-    model_to_plc->setItem(8, 0, new QStandardItem("备用2"));
-    model_to_plc->setItem(9, 0, new QStandardItem("备用3"));
+    // model_to_plc->setItem(0, 0, new QStandardItem("心跳"));
+    // model_to_plc->setItem(1, 0, new QStandardItem("是否有钢板"));
+    // model_to_plc->setItem(2, 0, new QStandardItem("头部位置"));
+    // model_to_plc->setItem(3, 0, new QStandardItem("板号"));
+    // model_to_plc->setItem(4, 0, new QStandardItem("图片名"));
+    // model_to_plc->setItem(5, 0, new QStandardItem("触发信号"));
+    // model_to_plc->setItem(6, 0, new QStandardItem("相机故障"));
+    // model_to_plc->setItem(7, 0, new QStandardItem("备用1"));
+    // model_to_plc->setItem(8, 0, new QStandardItem("备用2"));
+    // model_to_plc->setItem(9, 0, new QStandardItem("备用3"));
 
     //变量初始化
     QTimer::singleShot(1000, this,SLOT(varInit()));
@@ -97,8 +97,8 @@ void frmView1::resizeEvent(QResizeEvent *event) {
         height = ui->gView_front_pro->height();
         SetWindowExtents(winHandle_cam2_pro, 0, 0, width, height);
 
-        width = ui->gView_front_pro->width();
-        height = ui->gView_front_pro->height();
+        width = ui->gView_back_ori->width();
+        height = ui->gView_back_ori->height();
         SetWindowExtents(winHandle_cam1_pro, 0, 0, width, height);
 
         // width = ui->gView_back_pro->width();
@@ -123,11 +123,11 @@ void frmView1::varInit() {
                &winHandle_cam1_ori);
     HDevWindowStack::Push(winHandle_cam1_ori);
 
-    // Hlong winId_front_pro = (Hlong) ui->gView_front_pro->winId();
-    // SetWindowAttr("background_color", "gray");
-    // OpenWindow(0, 0, ui->gView_front_pro->width(), ui->gView_front_pro->height(), winId_front_pro, "visible", "",
-    //            &winHandle_cam1_pro);
-    // HDevWindowStack::Push(winHandle_cam1_pro);
+    Hlong winId_front_pro = (Hlong) ui->gView_front_pro->winId();
+    SetWindowAttr("background_color", "gray");
+    OpenWindow(0, 0, ui->gView_front_pro->width(), ui->gView_front_pro->height(), winId_front_pro, "visible", "",
+               &winHandle_cam1_pro);
+    HDevWindowStack::Push(winHandle_cam1_pro);
 
     Hlong winId_back_ori = (Hlong) ui->gView_back_ori->winId();
     SetWindowAttr("background_color", "gray");
@@ -181,6 +181,42 @@ void frmView1::varInit() {
 void frmView1::initForm() {
     MyApplication *pApp = (MyApplication *) qApp;
 
+    // if (pApp->m_workstationList.size() > 0) {
+
+    //     Workstation* station = pApp->m_workstationList[0];
+
+    //     // =========================================================================
+    //     // 1. 绑定：原始相机实时流 -> 显示到左右两个屏幕
+    //     // =========================================================================
+    //     if (station->m_pWorkerCamera) {
+    //         // 注意：这里连接的是 WorkerCamera.h 里面定义的 sigDisplayRawImage 信号
+    //         connect(station->m_pWorkerCamera, &WorkerCamera::sigDisplayRawImage,
+    //                 this, [=](const DualCameraChunk &chunk) {
+
+    //                     // ⚠️ 这里的 chunk.imgLeft 和 chunk.imgRight 是我猜的名字。
+    //                     // 如果报错，请去 workStationDataStructure.h 里面看一下 DualCameraChunk 结构体里
+    //                     // 存放左右图像的变量叫什么名字，替换一下即可！(可能是 leftMat, rightMat 或者是左相机QImage)
+
+    //                     // 显示左相机
+    //                     ui->gView_front_ori->ReceiveImage(chunk.imgLeft);
+
+    //                     // 显示右相机
+    //                     ui->gView_back_ori->ReceiveImage(chunk.imgRight);
+    //                 });
+    //     }
+
+    //     // =========================================================================
+    //     // 2. 绑定：算法处理后的拼接图 -> 显示到中间大屏
+    //     // =========================================================================
+    //     // 假设 Workstation 中有发送最终结果的信号 sigSendDataToUI，里面包含 WidthResult
+    //     connect(station, &Workstation::sigSendDataToUI,
+    //             this, [=](const WidthResult& result) {
+
+    //                 // ⚠️ 这里的 result.stitchedImage 也是我猜的。
+    //                 // 请去 workStationDataStructure.h 里面看一下 WidthResult 结构体里那张拼接图叫啥
+    //                 ui->gView_front_pro->ReceiveImage(result.stitchedImage);
+    //             });
+    // }
     //不换行
     ui->textBrowser->setWordWrapMode(QTextOption::NoWrap);
     //设置最大行数
@@ -451,3 +487,30 @@ void frmView1::on_pushButton_load_para_clicked() {
     // QLOG_INFO() << QString("环境变量 test_path=%1").arg(pNodeData->setting.test_path);
     // QLOG_INFO() << QString("环境变量 save_path=%1").arg(pNodeData->setting.save_path);
 }
+// #include "qcustomplot.h"
+
+// // 假设这段代码写在 frmshowcurve.cpp 或 frmview1.cpp 的初始化函数中
+// void frmView1::initCurve()
+// {
+//     // 1. 添加一条图线 (Graph)
+//     ui->widget_curve->addGraph();
+
+//     // 2. 设置曲线的颜色和粗细
+//     QPen bluePen;
+//     bluePen.setColor(QColor(0, 114, 219)); // 科技蓝
+//     bluePen.setWidth(2);
+//     ui->widget_curve->graph(0)->setPen(bluePen);
+
+//     // 3. 设置 X 轴和 Y 轴的文字标签
+//     ui->widget_curve->xAxis->setLabel("测量点位/时间");
+//     ui->widget_curve->yAxis->setLabel("测量宽度 (mm)");
+
+//     // 4. 设置初始的坐标轴显示范围
+//     // 假设你的目标宽度是 1250mm，上下公差 5mm
+//     ui->widget_curve->yAxis->setRange(1240, 1260);
+
+//     // 5. 让 X 轴的刻度以时间格式显示 (可选，如果你想用真实时间作为X轴)
+//     QSharedPointer<QCPAxisTickerTime> timeTicker(new QCPAxisTickerTime);
+//     timeTicker->setTimeFormat("%h:%m:%s");
+//     ui->widget_curve->xAxis->setTicker(timeTicker);
+// }

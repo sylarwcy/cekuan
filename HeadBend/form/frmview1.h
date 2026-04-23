@@ -61,6 +61,8 @@ private slots:
     void on_checkBox_test_video_clicked(bool checked);
     void on_pushButton_load_para_clicked();
 
+    // void initCurve();
+
     void onUpdateRawImage(const DualCameraChunk &chunk);
 };
 
