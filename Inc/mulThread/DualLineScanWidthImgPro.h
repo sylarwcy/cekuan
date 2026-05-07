@@ -19,6 +19,15 @@ public:
     // 算法参数设置（可在UI动态调节）
     void setAlgorithmParams(int edgeThreshold, double edgeAlpha);
 
+    // ========================================================
+    // 【新增】单边亚像素边缘提取函数
+    // ========================================================
+    // 寻找左相机画面中的钢板边缘（返回亚像素级的 X 坐标）
+    double findLeftEdgePixel(HalconCpp::HObject imgLeft);
+
+    // 寻找右相机画面中的钢板边缘（返回亚像素级的 X 坐标）
+    double findRightEdgePixel(HalconCpp::HObject imgRight);
+    // ========================================================
 private:
     // 提取单侧图像的边缘亚像素位置
     // direction: "positive"由暗到亮(左边缘), "negative"由亮到暗(右边缘)

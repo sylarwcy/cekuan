@@ -170,6 +170,7 @@ void frmView1::varInit() {
     // pApp->winHandle_back_ori = winHandle_cam2_ori;
     // pApp->winHandle_back_pro = winHandle_cam2_pro;
 
+
     //是否测试模式
     ui->checkBox_test_mode->setEnabled(false);
     ui->checkBox_test_mode->setChecked(pApp->pNodeData->setting.test_mode);
@@ -486,6 +487,16 @@ void frmView1::on_pushButton_load_para_clicked() {
     // QLOG_INFO() << QString("环境变量 calibrate_path=%1").arg(pNodeData->setting.calibrate_path);
     // QLOG_INFO() << QString("环境变量 test_path=%1").arg(pNodeData->setting.test_path);
     // QLOG_INFO() << QString("环境变量 save_path=%1").arg(pNodeData->setting.save_path);
+}
+
+void frmView1::onMeasureReady(const WidthResult &res)
+{
+    if (res.isOk) {
+        // 保留两位小数
+        ui->lineEdit_width->setText(QString::number(res.widthValue, 'f', 2));
+    } else {
+        ui->lineEdit_width->setText("Error");
+    }
 }
 // #include "qcustomplot.h"
 

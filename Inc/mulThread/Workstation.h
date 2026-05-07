@@ -25,7 +25,7 @@ public:
     void Init(QString iniSessionName);
     int ReadSetting();  // 读取配置文件（从setting.ini加载参数）
 
-    QString m_iniSessionName; //配置文件session名
+     QString m_iniSessionName;
     QString m_location;       //工位位置
     int m_serialNumber;       //工位序号
     WorkStation_DATA m_workstation_param; //工位参数

@@ -881,3 +881,40 @@ void MyCameraGigE::reconnect() {
         }
     }
 }
+
+// 注意：参数名我改成了 currentSpeed_ms，提醒传入的是 米/秒
+void MyCameraGigE::DynamicAdjustLineRate(float currentSpeed_ms)
+{
+    if (NULL == m_pcMyCamera || !m_bStartGrabbing) return;
+
+    // 1. 死区过滤：比较的依然是原始数值的差异
+    if (m_fLastSpeed > 0 && std::abs(currentSpeed_ms - m_fLastSpeed) / m_fLastSpeed < 0.01f)
+    {
+        return;
+    }
+    m_fLastSpeed = currentSpeed_ms;
+
+    // ==========================================
+    // 2. 核心数学计算：单位换算与行频求解
+    // ==========================================
+    // 假设你的像素当量是 0.1 毫米/行 (请替换为实际标定值)
+    float m_fMmPerLine = 0.1f;
+
+    // 先把速度从 米/秒 (m/s) 转换成 毫米/秒 (mm/s)
+    float speed_mms = currentSpeed_ms * 1000.0f;
+
+    // 目标行频 = 速度(mm/s) / 像素当量(mm/行)
+    float targetLineRate = speed_mms / m_fMmPerLine;
+
+    // 3. 边界保护 (假设相机允许范围 100 ~ 80000)
+    if (targetLineRate < 100.0f) targetLineRate = 100.0f;
+    if (targetLineRate > 80000.0f) targetLineRate = 80000.0f;
+
+    // 4. 下发参数给相机
+    int nRet = m_pcMyCamera->SetFloatValue("AcquisitionLineRateAbs", targetLineRate);
+
+    if (nRet != MV_OK)
+    {
+        QLOG_ERROR() << QString("动态设置行频失败，错误码：0x%1").arg(nRet, 0, 16);
+    }
+}

@@ -70,6 +70,11 @@ int AppConfig::b_y1_3=640;
 int AppConfig::b_y1_4=0;
 
 
+double AppConfig::StitchOffsetX = 1825.0;
+double AppConfig::StitchOffsetY = 2.0;
+double AppConfig::StitchScale = 0.659;
+int AppConfig::StitchTotalWidth = 6828;
+int AppConfig::StitchTotalHeight = 3300;
 void AppConfig::readConfig()
 {
     //配置文件不存在或者有问题则重新生成

@@ -4,9 +4,9 @@
 #include "appinit.h"
 #include "appconfig.h"
 #include "framelesshelper.h"
-
+#include "GlobalData.h"
 #include "MyApplication.h"
-
+extern HalconCpp::HTuple winHandle_pro;
 frmMain::frmMain(QWidget *parent) : QWidget(parent), ui(new Ui::frmMain)
 {
     ui->setupUi(this);
@@ -14,14 +14,16 @@ frmMain::frmMain(QWidget *parent) : QWidget(parent), ui(new Ui::frmMain)
     MyApplication *pApp=(MyApplication *)qApp;
     NodeData *pNodeData=pApp->pNodeData;
 
-    this->initProcess();
 
     this->initForm();
+
+
+
     this->initText();
     this->initNav();
     this->initIcon();
     this->initAction();
-
+    this->initProcess();
 
     QUIHelper::setFormInCenter(this);
     on_btnMenu_Max_clicked();
@@ -162,6 +164,7 @@ void frmMain::closeEvent(QCloseEvent *event)
 
 void frmMain::initProcess()
 {
+    qRegisterMetaType<WidthResult>("WidthResult");
     MyApplication *pApp=(MyApplication *)qApp;
 
     //标定参数
@@ -238,6 +241,52 @@ void frmMain::initProcess()
     pApp->b_hv_y1[2] = AppConfig::b_y1_3/b_each_pixel_equal_mm_col+b_col_offset;
     pApp->b_hv_y1[3] = AppConfig::b_y1_4/b_each_pixel_equal_mm_col+b_col_offset;
 
+
+
+
+
+
+    qDebug() << "--- 开始执行连线检查 ---";
+
+    // 排雷 1：检查 APP 对象
+    if (pApp == nullptr) {
+        qDebug() << "❌ 致命错误：pApp 是空指针！";
+        return;
+    }
+
+    // 排雷 2：检查工作站列表
+    if (pApp->m_workstationList.isEmpty()) {
+        qDebug() << "⚠️ 警告：m_workstationList 是空的！说明连线时工作站还没被创建。";
+        return;
+    }
+
+    // 排雷 3：检查列表第 0 个元素
+    Workstation* mainStation = pApp->m_workstationList.at(0);
+    if (mainStation == nullptr) {
+        qDebug() << "❌ 致命错误：列表里的 mainStation 是空指针！";
+        return;
+    }
+
+    // 排雷 4：检查视图指针（注意：如果它是野指针，这里查不出来，会直接在下一行崩溃）
+    if (pfrmView == nullptr) {
+        qDebug() << "❌ 致命错误：pfrmView 是空指针！你必须在 initProcess 之前 new 出这个界面！";
+        return;
+    }
+
+    // 如果上面都通过了，开始连线
+    qDebug() << "✅ 所有指针检查通过，开始连线...";
+
+    connect(mainStation, SIGNAL(sigSendDataToUI(WidthResult)),
+            pfrmView, SLOT(onMeasureReady(WidthResult)), Qt::QueuedConnection);
+
+    qDebug() << "✅ 连线成功完成！";
+    // if (pApp && !pApp->m_workstationList.isEmpty() && pfrmView) {
+    //     Workstation* mainStation = pApp->m_workstationList.at(0);
+
+    //     // 【终极连线法】：使用 SIGNAL 和 SLOT 宏，忽略严格的指针匹配
+    //     connect(mainStation, SIGNAL(sigSendDataToUI(WidthResult)),
+    //             pfrmView, SLOT(onMeasureReady(WidthResult)), Qt::QueuedConnection);
+    // }
 }
 
 void frmMain::initForm()
@@ -279,6 +328,14 @@ void frmMain::initForm()
     ui->bottomWidget->setFontSize(fontSize);
     ui->bottomWidget->setLineFixedWidth(true);
     ui->bottomWidget->start();
+
+    // // HTuple winHandle_pro;
+    // // 在连线之前，确保它被真正创建了！
+    // if (pfrmView == nullptr  /* 或者是野指针导致的没初始化 */) {
+    //     // 强制给它分配内存（如果你头文件里叫 frmView1，这里就 new frmView1）
+    //     pfrmView = new frmView(this);
+    // }
+
 
 }
 

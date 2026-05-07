@@ -74,6 +74,16 @@ public:
     static int b_y1_4;
 
 
+    // ========== 图像拼接专用参数 ==========
+    static double StitchOffsetX;     // 横向物理偏移(mm)
+    static double StitchOffsetY;     // 纵向错位公差(mm)
+    static double StitchScale;       // 像素当量(mm/px)
+    static int StitchTotalWidth;     // 画布总宽
+    static int StitchTotalHeight;    // 画布总高
+    // =====================================
+
+    static void ReadConfig();
+    static void WriteConfig();
     static void readConfig();                   //读取配置文件,在main函数最开始加载程序载入
     static void writeConfig_front_data();      //写入配置文件,在更改配置文件程序关闭时调用
     static void writeConfig_back_data();      //写入配置文件,在更改配置文件程序关闭时调用

@@ -97,6 +97,7 @@ public:
     void processBackImage(HObject &ho_image,int width,int height);
     static void __stdcall ReconnectDevice(unsigned int nMsgType, void* pUser);
     void reconnect();
+    void DynamicAdjustLineRate(float currentSpeed_ms);
 
 public:
     QString cameraIP;
@@ -122,9 +123,11 @@ public:
     int   m_nTriggerMode;                       //触发模式
     int   m_nTriggerSource;                     //触发源
 
-    CMvCamera* m_pcMyCamera;                    //CMyCamera封装了常用接口
-
-
+    CMvCamera* m_pcMyCamera;
+    // 记录上一次的速度，用于过滤重复指令
+    float m_fLastSpeed = -1.0f;
+    // 像素当量 (非常关键！代表相机扫一行等于物理上走多少毫米，根据你们的实际标定值修改)
+    float m_fMmPerLine = 0.1f;
 
     CRITICAL_SECTION        m_hSaveImageMux;
     unsigned char*          m_pSaveImageBuf;

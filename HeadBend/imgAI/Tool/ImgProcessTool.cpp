@@ -234,3 +234,93 @@ const HTuple ImgProcessTool::FindDevice(const QString &deviceType) {
     }
     return deviceHandle;
 }
+
+// double ImgProcessTool::findLeftEdgePixel(HalconCpp::HObject imgLeft)
+// {
+//     double edgeCol = 0.0;
+//     try {
+//         // 1. 获取图像尺寸
+//         HTuple hv_Width, hv_Height;
+//         GetImageSize(imgLeft, &hv_Width, &hv_Height);
+
+//         // 2. 生成一个 1D 测量句柄 (Measure Handle)
+//         // 假设我们在图像中间偏下的位置拉一条水平线来找边
+//         HTuple hv_Row = hv_Height / 2;       // 测量线的 Y 坐标 (可以根据产线调整)
+//         HTuple hv_Col = hv_Width / 2;        // 测量线的 X 中心
+//         HTuple hv_Phi = 0.0;                 // 角度 0 度 (水平向右)
+//         HTuple hv_Length1 = hv_Width / 2;    // 测量框的半长 (覆盖整个图宽)
+//         HTuple hv_Length2 = 20;              // 测量框的半高 (类似卡尺的宽度，20px 能过滤噪点)
+//         HTuple hv_Interpolation = "nearest_neighbor";
+//         HTuple hv_MeasureHandle;
+
+//         GenMeasureRectangle2(hv_Row, hv_Col, hv_Phi, hv_Length1, hv_Length2,
+//                              hv_Width, hv_Height, hv_Interpolation, &hv_MeasureHandle);
+
+//         // 3. 执行亚像素找边
+//         HTuple hv_RowEdge, hv_ColEdge, hv_Amplitude, hv_Distance;
+//         // 注意："negative" 表示由亮变暗 (背光模式下，左边是亮光，往右碰到黑色的钢板)
+//         // 30 是边缘对比度阈值，"first" 表示找第一条符合条件的边
+//         MeasurePos(imgLeft, hv_MeasureHandle, 1.0, 30, "negative", "first",
+//                    &hv_RowEdge, &hv_ColEdge, &hv_Amplitude, &hv_Distance);
+
+//         // 4. 释放句柄 (极度重要，防止内存泄漏)
+//         CloseMeasure(hv_MeasureHandle);
+
+//         // 5. 提取坐标
+//         if (hv_ColEdge.Length() > 0) {
+//             edgeCol = hv_ColEdge[0].D(); // 获取精确到小数点的亚像素 X 坐标
+//         } else {
+//             // 没找到边的异常处理（可以返回 -1 或者抛出异常）
+//             edgeCol = -1.0;
+//         }
+
+//     } catch (HException &except) {
+//         // 异常捕获
+//         edgeCol = -1.0;
+//     }
+
+//     return edgeCol;
+// }
+
+// // ======================================================================
+// // 提取右相机的边缘 (假设钢板在画面左侧，背景在右侧)
+// // ======================================================================
+// double ImgProcessTool::findRightEdgePixel(HalconCpp::HObject imgRight)
+// {
+//     double edgeCol = 0.0;
+//     try {
+//         HTuple hv_Width, hv_Height;
+//         GetImageSize(imgRight, &hv_Width, &hv_Height);
+
+//         HTuple hv_Row = hv_Height / 2;
+//         HTuple hv_Col = hv_Width / 2;
+//         HTuple hv_Phi = 0.0;
+//         HTuple hv_Length1 = hv_Width / 2;
+//         HTuple hv_Length2 = 20;
+//         HTuple hv_Interpolation = "nearest_neighbor";
+//         HTuple hv_MeasureHandle;
+
+//         GenMeasureRectangle2(hv_Row, hv_Col, hv_Phi, hv_Length1, hv_Length2,
+//                              hv_Width, hv_Height, hv_Interpolation, &hv_MeasureHandle);
+
+//         HTuple hv_RowEdge, hv_ColEdge, hv_Amplitude, hv_Distance;
+//         // 注意："positive" 表示由暗变亮 (背光模式下，左边是黑色的钢板，往右离开钢板变成亮光)
+//         // "last" 表示找画面里最后一条符合条件的边，防止钢板表面反光被误认
+//         MeasurePos(imgRight, hv_MeasureHandle, 1.0, 30, "positive", "last",
+//                    &hv_RowEdge, &hv_ColEdge, &hv_Amplitude, &hv_Distance);
+
+//         CloseMeasure(hv_MeasureHandle);
+
+//         if (hv_ColEdge.Length() > 0) {
+//             // 如果 "last" 找到了多条（按理说 MeasurePos 只返回设定的点），取最后那个
+//             edgeCol = hv_ColEdge[hv_ColEdge.Length() - 1].D();
+//         } else {
+//             edgeCol = -1.0;
+//         }
+
+//     } catch (HException &except) {
+//         edgeCol = -1.0;
+//     }
+
+//     return edgeCol;
+// }

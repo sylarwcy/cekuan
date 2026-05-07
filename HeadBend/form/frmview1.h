@@ -43,6 +43,8 @@ public slots:
 
     void startDispRefresh();
 
+    // 【新增】接收测量结果的槽函数
+    void onMeasureReady(const WidthResult &res);
 public:
     void initForm();
 
@@ -60,6 +62,8 @@ private slots:
     void on_checkBox_test_img_clicked(bool checked);
     void on_checkBox_test_video_clicked(bool checked);
     void on_pushButton_load_para_clicked();
+
+private slots:
 
     // void initCurve();
 

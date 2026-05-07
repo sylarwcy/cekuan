@@ -30,6 +30,11 @@ signals:
 
     void sigProcessError(QString);
 
+    // // 已有的测量结果信号
+    // void sigMeasureReady(WidthResult res);
+
+    // // 【新增】将拼接好的大图发给主界面显示的信号
+    // void sigDisplayImageReady(HalconCpp::HObject imgFull);
 private:
     DualLineScanWidthImgPro *m_algo;
     bool m_isProcessing{false};

@@ -21,6 +21,16 @@ namespace ImgProcessTool {
     double calculateIOU(const cv::Rect_<int>& rect1, const cv::Rect_<int>& rect2);
     void filterOverlappingBoxes(DetRes &detRes);
     const HTuple FindDevice(const QString &deviceType);
+    void DynamicAdjustLineRate(float currentSpeed_ms);
+
+    // // 【新增】单边亚像素边缘提取函数
+    // // ========================================================
+    // // 寻找左相机画面中的钢板边缘（返回亚像素级的 Column 坐标）
+    // double findLeftEdgePixel(HalconCpp::HObject imgLeft);
+
+    // // 寻找右相机画面中的钢板边缘（返回亚像素级的 Column 坐标）
+    // double findRightEdgePixel(HalconCpp::HObject imgRight);
+    // // ========================================================
 }
 
 

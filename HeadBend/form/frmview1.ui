@@ -469,7 +469,7 @@
                 <string>测量宽度</string>
                </property>
               </widget>
-              <widget class="QLineEdit" name="lineEdit">
+              <widget class="QLineEdit" name="lineEdit_width">
                <property name="geometry">
                 <rect>
                  <x>90</x>

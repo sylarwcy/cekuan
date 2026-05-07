@@ -1,6 +1,58 @@
 ﻿#include "DualLineScanWidthImgPro.h"
 #include <QDebug>
+// 假设此函数在你的图像处理类中运行
+// void DualLineScanWidthImgPro::processAndStitch(HObject ho_ImageLeft, HObject ho_ImageRight) {
+//     HObject ho_ImageFull, ho_ImagesConcat;
 
+//     try {
+//         // 1. 合并对象
+//         GenEmptyObj(&ho_ImagesConcat);
+//         ConcatObj(ho_ImageLeft, ho_ImageRight, &ho_ImagesConcat);
+
+//         // 2. 计算像素级偏移
+//         // Y偏移 = 物理位移 / 像素当量
+//         // X偏移 = 物理位移 / 像素当量
+//         HTuple hv_RowOffsets, hv_ColOffsets, hv_MinusOne;
+//         hv_RowOffsets.Append(0).Append(AppConfig::StitchOffsetY / AppConfig::StitchScale);
+//         hv_ColOffsets.Append(0).Append(AppConfig::StitchOffsetX / AppConfig::StitchScale);
+//         hv_MinusOne.Append(-1).Append(-1);
+
+//         // 3. 执行拼接
+//         TileImagesOffset(ho_ImagesConcat, &ho_ImageFull,
+//                          hv_RowOffsets, hv_ColOffsets,
+//                          hv_MinusOne, hv_MinusOne, hv_MinusOne, hv_MinusOne,
+//                          AppConfig::StitchTotalWidth, AppConfig::StitchTotalHeight);
+
+//         // 4. 使用你要求的链路进行显示
+//         if (!HtupleIsEmpty(winHandle_pro)) {
+//             // 激活窗口
+//             HDevWindowStack::SetActive(winHandle_pro);
+
+//             if (HDevWindowStack::IsOpen()) {
+//                 // 关闭即时刷新，防止大图闪烁
+//                 SetSystem("flush_graphic", "false");
+
+//                 // 获取拼接图尺寸并设置显示视口（自适应缩放的关键）
+//                 HTuple hv_FullW, hv_FullH;
+//                 GetImageSize(ho_ImageFull, &hv_FullW, &hv_FullH);
+//                 SetPart(winHandle_pro, 0, 0, hv_FullH - 1, hv_FullW - 1);
+
+//                 // 显示拼接完成的大图
+//                 DispObj(ho_ImageFull, winHandle_pro);
+
+//                 // 恢复刷新
+//                 SetSystem("flush_graphic", "true");
+//             }
+//         }
+
+//         // 5. 清理内存
+//         ho_ImagesConcat.Clear();
+//         // 如果 ho_ImageFull 不需要传给下一级，也记得 Clear
+
+//     } catch (HException &ex) {
+//         // 异常处理逻辑
+//     }
+// }
 DualLineScanWidthImgPro::DualLineScanWidthImgPro()
     : m_pixelResLeft(0.1),
       m_pixelResRight(0.1),
@@ -71,6 +123,8 @@ WidthResult DualLineScanWidthImgPro::process(const HObject& imgLeft, const HObje
         result.isOk = true;
         result.errorMsg = "Success";
 
+
+
     } catch (HException& e) {
         // 捕获 Halcon 内部算子异常
         result.isOk = false;
@@ -125,4 +179,86 @@ bool DualLineScanWidthImgPro::extractEdge(const HObject& img, const HTuple& tran
         qWarning() << "extractEdge Exception:" << e.ErrorMessage().Text();
         return false;
     }
+}
+// ======================================================================
+// 提取左相机的边缘 (左边画面：钢板在右，背景在左)
+// ======================================================================
+double DualLineScanWidthImgPro::findLeftEdgePixel(HalconCpp::HObject imgLeft)
+{
+    double edgeCol = 0.0;
+    try {
+        // 1. 获取图像尺寸
+        HalconCpp::HTuple hv_Width, hv_Height;
+        HalconCpp::GetImageSize(imgLeft, &hv_Width, &hv_Height);
+
+        // 2. 生成一个 1D 测量句柄 (Measure Handle)
+        HalconCpp::HTuple hv_Row = hv_Height / 2;       // 测量线的 Y 坐标 (画面正中间)
+        HalconCpp::HTuple hv_Col = hv_Width / 2;        // 测量线的 X 中心
+        HalconCpp::HTuple hv_Phi = 0.0;                 // 角度 0 度 (水平向右)
+        HalconCpp::HTuple hv_Length1 = hv_Width / 2;    // 测量框的半长 (覆盖整个图宽)
+        HalconCpp::HTuple hv_Length2 = 20;              // 测量框的半高 (20像素用来平均降噪)
+        HalconCpp::HTuple hv_Interpolation = "nearest_neighbor";
+        HalconCpp::HTuple hv_MeasureHandle;
+
+        HalconCpp::GenMeasureRectangle2(hv_Row, hv_Col, hv_Phi, hv_Length1, hv_Length2,
+                                        hv_Width, hv_Height, hv_Interpolation, &hv_MeasureHandle);
+
+        // 3. 执行亚像素找边
+        HalconCpp::HTuple hv_RowEdge, hv_ColEdge, hv_Amplitude, hv_Distance;
+        // "negative" 表示由亮变暗 (左边亮光背景，向右碰到黑色的钢板)
+        HalconCpp::MeasurePos(imgLeft, hv_MeasureHandle, 1.0, 30, "negative", "first",
+                              &hv_RowEdge, &hv_ColEdge, &hv_Amplitude, &hv_Distance);
+
+        // 4. 释放句柄 (极度重要，防止内存泄漏)
+        HalconCpp::CloseMeasure(hv_MeasureHandle);
+
+        // 5. 提取坐标
+        if (hv_ColEdge.Length() > 0) {
+            edgeCol = hv_ColEdge[0].D();
+        } else {
+            edgeCol = -1.0;
+        }
+    } catch (HalconCpp::HException &except) {
+        edgeCol = -1.0;
+    }
+    return edgeCol;
+}
+
+// ======================================================================
+// 提取右相机的边缘 (右边画面：钢板在左，背景在右)
+// ======================================================================
+double DualLineScanWidthImgPro::findRightEdgePixel(HalconCpp::HObject imgRight)
+{
+    double edgeCol = 0.0;
+    try {
+        HalconCpp::HTuple hv_Width, hv_Height;
+        HalconCpp::GetImageSize(imgRight, &hv_Width, &hv_Height);
+
+        HalconCpp::HTuple hv_Row = hv_Height / 2;
+        HalconCpp::HTuple hv_Col = hv_Width / 2;
+        HalconCpp::HTuple hv_Phi = 0.0;
+        HalconCpp::HTuple hv_Length1 = hv_Width / 2;
+        HalconCpp::HTuple hv_Length2 = 20;
+        HalconCpp::HTuple hv_Interpolation = "nearest_neighbor";
+        HalconCpp::HTuple hv_MeasureHandle;
+
+        HalconCpp::GenMeasureRectangle2(hv_Row, hv_Col, hv_Phi, hv_Length1, hv_Length2,
+                                        hv_Width, hv_Height, hv_Interpolation, &hv_MeasureHandle);
+
+        HalconCpp::HTuple hv_RowEdge, hv_ColEdge, hv_Amplitude, hv_Distance;
+        // "positive" 表示由暗变亮 (左边是黑色的钢板，向右离开钢板变成亮光背景)
+        HalconCpp::MeasurePos(imgRight, hv_MeasureHandle, 1.0, 30, "positive", "last",
+                              &hv_RowEdge, &hv_ColEdge, &hv_Amplitude, &hv_Distance);
+
+        HalconCpp::CloseMeasure(hv_MeasureHandle);
+
+        if (hv_ColEdge.Length() > 0) {
+            edgeCol = hv_ColEdge[hv_ColEdge.Length() - 1].D();
+        } else {
+            edgeCol = -1.0;
+        }
+    } catch (HalconCpp::HException &except) {
+        edgeCol = -1.0;
+    }
+    return edgeCol;
 }
