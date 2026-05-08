@@ -79,12 +79,29 @@ struct DualCameraChunk {
 
 // 2. 算法发给 UI 和 数据库的“测量结果”
 struct WidthResult {
-    bool isOk;              // 测量是否成功
-    double widthValue;      // 最终宽度 (mm)
-    double leftEdgeCol;     // 左边缘图像坐标 (Pixel)
-    double rightEdgeCol;    // 右边缘图像坐标 (Pixel)
-    double centerOffset;    // 跑偏量 (mm)
-    QString errorMsg;       // 错误信息（如果有）
+    // bool isOk;              // 测量是否成功
+    // double widthValue;      // 最终宽度 (mm)
+    // double leftEdgeCol;     // 左边缘图像坐标 (Pixel)
+    // double rightEdgeCol;    // 右边缘图像坐标 (Pixel)
+    // double centerOffset;    // 跑偏量 (mm)
+    // QString errorMsg;       // 错误信息（如果有）
+
+    uint64_t frameID;       // 硬件帧号
+    bool isValid;           // 是否成功抓取到有效钢板边缘
+    double widthValue;      // 物理宽度 (mm)
+    double yawAngle;        // 偏航角 (度)
+
+    // UI 画线专用的相对坐标 (相对于裁剪后的最终显示图像)
+    int renderLeftX;
+    int renderRightX;
+    int renderY;
+
+    HalconCpp::HObject dispImage;
+
+    WidthResult() : frameID(0), isValid(false), widthValue(0.0), yawAngle(0.0),
+                    renderLeftX(-1), renderRightX(-1), renderY(-1) {
+        HalconCpp::GenEmptyObj(&dispImage); // 初始化为空图像
+    }
 };
 
 Q_DECLARE_METATYPE(DualCameraChunk)

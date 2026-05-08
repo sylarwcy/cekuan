@@ -104,19 +104,20 @@ bool WorkerCamera::initCameras(const QString& leftSN, const QString& rightSN,  c
 
 void WorkerCamera::configureMasterSlave()
 {
+    ;
     // 【左相机 Master】：关闭软触发，开启内部行频，配置引脚输出脉冲
-    MV_CC_SetEnumValueByString(m_hDevLeft, "TriggerMode", "Off");
-    MV_CC_SetBoolValue(m_hDevLeft, "AcquisitionLineRateEnable", true);
-    MV_CC_SetFloatValue(m_hDevLeft, "AcquisitionLineRate", m_lineRate); // 默认行频
-    MV_CC_SetEnumValueByString(m_hDevLeft, "LineSelector", "Line1");
-    MV_CC_SetEnumValueByString(m_hDevLeft, "LineMode", "Output");
-    MV_CC_SetEnumValueByString(m_hDevLeft, "LineSource", "ExposureActive");
+    // MV_CC_SetEnumValueByString(m_hDevLeft, "TriggerMode", "Off");
+    // MV_CC_SetBoolValue(m_hDevLeft, "AcquisitionLineRateEnable", true);
+    // MV_CC_SetFloatValue(m_hDevLeft, "AcquisitionLineRate", m_lineRate); // 默认行频
+    // MV_CC_SetEnumValueByString(m_hDevLeft, "LineSelector", "Line1");
+    // MV_CC_SetEnumValueByString(m_hDevLeft, "LineMode", "Output");
+    // MV_CC_SetEnumValueByString(m_hDevLeft, "LineSource", "ExposureActive");
 
     // 【右相机 Slave】：开启硬件外部触发，紧盯 Line1
-    MV_CC_SetEnumValueByString(m_hDevRight, "TriggerSelector", "LineStart");
-    MV_CC_SetEnumValueByString(m_hDevRight, "TriggerMode", "On");
-    MV_CC_SetEnumValueByString(m_hDevRight, "TriggerSource", "Line1");
-    MV_CC_SetEnumValueByString(m_hDevRight, "TriggerActivation", "RisingEdge");
+    // MV_CC_SetEnumValueByString(m_hDevRight, "TriggerSelector", "LineStart");
+    // MV_CC_SetEnumValueByString(m_hDevRight, "TriggerMode", "On");
+    // MV_CC_SetEnumValueByString(m_hDevRight, "TriggerSource", "Line1");
+    // MV_CC_SetEnumValueByString(m_hDevRight, "TriggerActivation", "RisingEdge");
 }
 
 void WorkerCamera::onUpdateSpeedFromPLC(double speed_m_s)

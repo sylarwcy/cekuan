@@ -82,6 +82,8 @@ signals:
     // 将底层发来的日志，继续向上转发给界面 (frmmain)
     void signalLogToUI(QString msg);
 
+    void sigUpdateProcessedImage(int stationId, const HalconCpp::HObject &img);
+
     void sigForwardToView(const DualCameraChunk& chunk);
 
     // 将算法算出的宽度结果，向上转发给界面画曲线

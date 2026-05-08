@@ -23,6 +23,7 @@ private:
 public:
     HTuple winHandle_cam1_ori;
     HTuple winHandle_cam1_pro;
+    HTuple winHandle_cam1_hebing;
 
     HTuple winHandle_cam2_ori;
     HTuple winHandle_cam2_pro;
@@ -45,6 +46,7 @@ public slots:
 
     // 【新增】接收测量结果的槽函数
     void onMeasureReady(const WidthResult &res);
+
 public:
     void initForm();
 

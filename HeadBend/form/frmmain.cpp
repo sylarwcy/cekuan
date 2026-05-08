@@ -241,11 +241,6 @@ void frmMain::initProcess()
     pApp->b_hv_y1[2] = AppConfig::b_y1_3/b_each_pixel_equal_mm_col+b_col_offset;
     pApp->b_hv_y1[3] = AppConfig::b_y1_4/b_each_pixel_equal_mm_col+b_col_offset;
 
-
-
-
-
-
     qDebug() << "--- 开始执行连线检查 ---";
 
     // 排雷 1：检查 APP 对象
@@ -276,8 +271,10 @@ void frmMain::initProcess()
     // 如果上面都通过了，开始连线
     qDebug() << "✅ 所有指针检查通过，开始连线...";
 
-    connect(mainStation, SIGNAL(sigSendDataToUI(WidthResult)),
-            pfrmView, SLOT(onMeasureReady(WidthResult)), Qt::QueuedConnection);
+    // connect(mainStation, SIGNAL(sigSendDataToUI(WidthResult)),
+    //         pfrmView, SLOT(onMeasureReady(WidthResult)), Qt::QueuedConnection);
+
+    connect(mainStation, &Workstation::sigSendDataToUI, pfrmView->pfrmView1, &frmView1::onMeasureReady, Qt::QueuedConnection);
 
     qDebug() << "✅ 连线成功完成！";
     // if (pApp && !pApp->m_workstationList.isEmpty() && pfrmView) {

@@ -226,20 +226,34 @@ void frmView1::initForm() {
 
 void frmView1::onUpdateRawImage(const DualCameraChunk &chunk) {
     try {
-        // 渲染左图
+        // 1. 渲染左图 (Master)
         if (chunk.imgLeft.IsInitialized()) {
-            // 假设你已经有了 Halcon 窗口句柄 m_hWinL
-            // HalconCpp::SetPart(m_hWinL, 0, 0, height, width);
+            HTuple widthL, heightL;
+            // 获取当前左图的真实宽高
+            HalconCpp::GetImageSize(chunk.imgLeft, &widthL, &heightL);
+
+            // 【核心修复】：重置左窗视口，确保图像完整显示且自适应控件大小
+            HalconCpp::SetPart(winHandle_cam1_ori, 0, 0, heightL - 1, widthL - 1);
+
+            // 执行显示
             HalconCpp::DispObj(chunk.imgLeft, winHandle_cam1_ori);
         }
 
-        // 渲染右图
+        // 2. 渲染右图 (Slave)
         if (chunk.imgRight.IsInitialized()) {
+            HTuple widthR, heightS;
+            // 获取当前右图的真实宽高
+            HalconCpp::GetImageSize(chunk.imgRight, &widthR, &heightS);
+
+            // 【核心修复】：重置右窗视口
+            HalconCpp::SetPart(winHandle_cam2_ori, 0, 0, heightS - 1, widthR - 1);
+
+            // 执行显示
             HalconCpp::DispObj(chunk.imgRight, winHandle_cam2_ori);
         }
     } catch (const HalconCpp::HException& e) {
-        // 即使画图出错了，也只会在日志里报一下，绝对不会影响后台相机的极速采图
-        QLOG_ERROR() << "UI界面刷新图像失败:" << e.ErrorMessage().Text();
+        // 增加更详细的错误日志
+        QLOG_ERROR() << "UI界面刷新原始图像失败, 原因:" << e.ErrorMessage().Text();
     }
 }
 
@@ -491,11 +505,70 @@ void frmView1::on_pushButton_load_para_clicked() {
 
 void frmView1::onMeasureReady(const WidthResult &res)
 {
-    if (res.isOk) {
+    qDebug() << "[Pipeline-4] UI 界面成功拆包 -> 准备刷新数值和画面! 图像状态:" << res.dispImage.IsInitialized();
+    if (res.isValid) {
         // 保留两位小数
         ui->lineEdit_width->setText(QString::number(res.widthValue, 'f', 2));
     } else {
         ui->lineEdit_width->setText("Error");
+    }
+
+// 2. 渲染融合图像到窗口
+    if (res.dispImage.IsInitialized()) {
+        try {
+            // 使用界面绑定的 Halcon 窗口句柄
+            HTuple currentWin = this->winHandle_cam1_pro;
+
+            // =========================================================
+            // 【核心修复】：动态自适应图像尺寸，解决画面不完整的问题
+            // =========================================================
+            HTuple imgW, imgH;
+            HalconCpp::GetImageSize(res.dispImage, &imgW, &imgH);
+
+            // 强制将 Halcon 窗口的显示视口设定为图像的完整宽高
+            // 这句代码会让图像自动缩放，完美塞进 UI 控件中，绝不被裁切！
+            HalconCpp::SetPart(currentWin, 0, 0, imgH - 1, imgW - 1);
+
+            // A. 显示拼接好的大图
+            HalconCpp::DispObj(res.dispImage, currentWin);
+            set_display_font(currentWin, 30, "mono", "true", "false");
+
+            // 如果测量有效，开始叠加渲染文字和线条
+            if (res.isValid && res.renderLeftX != -1) {
+
+                // B. 绘制边缘线条 (绿色/青色)
+                HalconCpp::SetLineWidth(currentWin, 2);
+
+                // 【顺手优化】：把之前写死的 2048 长度改成了动态自适应的高度 (imgH)
+                HalconCpp::SetColor(currentWin, "green");
+                HalconCpp::DispLine(currentWin, 0, res.renderLeftX, imgH - 1, res.renderLeftX);
+
+                HalconCpp::SetColor(currentWin, "cyan");
+                HalconCpp::DispLine(currentWin, 0, res.renderRightX, imgH - 1, res.renderRightX);
+
+                // C. 绘制测量十字星 (黄色)
+                HalconCpp::SetColor(currentWin, "yellow");
+                HalconCpp::DispCross(currentWin, res.renderY, res.renderLeftX, 60, 0);
+                HalconCpp::DispCross(currentWin, res.renderY, res.renderRightX, 60, 0);
+
+                // D. 渲染结果文字
+                QString widthStr = QString("Physical Width: %1 mm").arg(res.widthValue, 0, 'f', 3);
+                HalconCpp::DispText(currentWin, widthStr.toLocal8Bit().constData(),
+                                    "window", 20, 20, "red", HTuple(), HTuple());
+
+                QString yawStr = QString("Yaw Angle: %1 deg").arg(res.yawAngle, 0, 'f', 2);
+                HalconCpp::DispText(currentWin, yawStr.toLocal8Bit().constData(),
+                                    "window", 50, 20, "yellow", HTuple(), HTuple());
+
+            } else {
+                // 如果无效，在图上正中间写个大大的红色警告
+                HalconCpp::DispText(currentWin, "NO PLATE DETECTED",
+                                    "window", "center", "center", "red", HTuple(), HTuple());
+            }
+
+        } catch (HalconCpp::HException &e) {
+            qWarning() << "[UI渲染报错] " << e.ErrorMessage().Text();
+        }
     }
 }
 // #include "qcustomplot.h"

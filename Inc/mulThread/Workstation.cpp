@@ -110,6 +110,7 @@ void Workstation::SettingQThread() {
     // ==============================================================
     m_pWorkerCamera = new WorkerCamera();
     m_pWorkerImageProcess = new WorkerImageProcess();
+    m_pWorkerImageProcess->init(m_workstation_param);
     m_pWorkerPlc = new WorkerPLC();
 
     // ==============================================================
@@ -130,7 +131,7 @@ void Workstation::SettingQThread() {
     // 5. 绑定跨线程通信的“神经总线” (强制使用 QueuedConnection 异步队列)
     // ==============================================================
 
-    // [神经A]: 海康底层拼好图 -> 扔给 Halcon 算法大脑
+    // 海康底层拼好图 -> 扔给 Halcon 算法大脑
     connect(m_pWorkerCamera, &WorkerCamera::sigImageReadyToAlg,
             m_pWorkerImageProcess, &WorkerImageProcess::imgProcessMeasure,
             Qt::QueuedConnection);
@@ -139,12 +140,12 @@ void Workstation::SettingQThread() {
             this, &Workstation::onDisplayImage,
             Qt::QueuedConnection);
 
-    // [神经B]: Halcon 算法算完宽度 -> 扔给主界面 UI 进行曲线渲染和存库
+    // Halcon 算法算完宽度 -> 扔给主界面 UI 进行曲线渲染和存库
     connect(m_pWorkerImageProcess, &WorkerImageProcess::sigMeasureReady,
             this, &Workstation::onProcessResult,
             Qt::QueuedConnection);
 
-    // [神经C]: 收集底层日志 -> 扔给主界面显示
+    // 收集底层日志 -> 扔给主界面显示
     connect(m_pWorkerCamera, &WorkerCamera::signalCameraLog,
             this, &Workstation::onLogReceived,
             Qt::QueuedConnection);
@@ -256,15 +257,21 @@ void Workstation::onLogReceived(QString msg)
 // -------------------------------------------------------------------------
 void Workstation::onProcessResult(const WidthResult& result)
 {
-    // 1. 格式化数据 (保留两位小数)
+    // if (!result.isValid || result.widthValue <= 0.0) {
+    //     // qWarning() << "[检测报警] 当前帧未捕获到钢板，跳过曲线绘制。";
+    //     return;
+    // }
+    qDebug() << "[Pipeline-3] Workstation (" << m_serialNumber << ") 收到包裹 -> 准备转发给 UI, 宽度:" << result.widthValue;
+    // 格式化打印 (用于终端调试)
     QString strWidth = QString::number(result.widthValue, 'f', 2);
-    QString strOffset = QString::number(result.centerOffset, 'f', 2);
+    QString strYaw = QString::number(result.yawAngle, 'f', 2);
+    // qDebug() << "帧号:" << result.frameID << "测宽:" << strWidth << "mm, 偏航:" << strYaw << "度";
 
-    // 2. 更新 UI (注意：由于 Workstation 在主线程，直接操作 UI 是安全的)
-    // ui->lcdNumber_Width->display(strWidth);
-    // ui->lcdNumber_Offset->display(strOffset);
+    // 1. 发送给 UI 的图表组件 (让 frmshowcurve 接管，进行等距 push_back 画线)
+    // 假设你有一个信号： void sigUpdateCurve(double width);
+    // emit sigUpdateCurve(result.widthValue);
 
-    // 4. 数据记录与通讯
+    // 2. 数据记录与通讯
     // 将数据压入图表缓存用于绘制曲线
     emit sigSendDataToUI(result);
 

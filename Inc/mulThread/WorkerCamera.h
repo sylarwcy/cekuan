@@ -72,9 +72,9 @@ public:
 
     QString m_leftSN;
     QString m_rightSN;
-    int m_imgWidth;
-    int m_imgHeight;
-    float m_lineRate = 500.0f;
+    int m_imgWidth=4096;
+    int m_imgHeight=800;
+    float m_lineRate = 380.0f;
 
     // HalconCpp::HTuple m_winHandle_ori, m_winHandle_pro;
 
