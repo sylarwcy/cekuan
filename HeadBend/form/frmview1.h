@@ -10,6 +10,28 @@ namespace Ui {
     class frmView1;
 }
 
+struct PlateRecord {
+    QString plateID{"001"};       // 板号
+    double length{0};         // 长度
+    double thickness{0};      // 厚度
+    double targetWidth{0};    // 设定宽度
+    double avgWidth{0};       // 平均宽度
+    double maxWidth{0};       // 最大宽度
+    double minWidth{0};       // 最小宽度
+};
+
+inline QDataStream &operator<<(QDataStream &out, const PlateRecord &record) {
+    out << record.plateID << record.length << record.thickness
+        << record.targetWidth << record.avgWidth << record.maxWidth << record.minWidth;
+    return out;
+}
+
+inline QDataStream &operator>>(QDataStream &in, PlateRecord &record) {
+    in >> record.plateID >> record.length >> record.thickness
+       >> record.targetWidth >> record.avgWidth >> record.maxWidth >> record.minWidth;
+    return in;
+}
+
 class frmView1 : public QWidget
 {
     Q_OBJECT
@@ -63,6 +85,9 @@ private:
     int m_emptyFrameCount;       // 计数器：连续没有检测到钢板的帧数
     const int EMPTY_FRAME_LIMIT = 3; // 防抖阈值：连续3帧没看到，才认为板子真走了
 
+    QList<HalconCpp::HObject> m_preBufferList;
+    const int HEAD_FRAME_COUNT = 3;  // 【补头配置】：提前缓存 3 帧作为板头
+
     // --- 曲线图操作函数 ---
     void initCurveChart();           // 初始化曲线图表样式
 
@@ -73,6 +98,19 @@ private:
     void initFusionView();          // 初始化全景窗口
     void resetFusion();             // 清空拼接大图
     void addFrameToFusion(HalconCpp::HObject newFrame); // 执行拼接、旋转与显示
+
+    // --- 本地历史数据相关 ---
+    QList<PlateRecord> m_historyList;        // 内存中缓存的最近5条记录
+    QStandardItemModel *m_tableModelHistory; // 用于界面显示的表格模型
+
+    void initHistoryUI();                    // 初始化表格
+    void loadHistoryFromFile();              // 软件启动时加载二进制文件
+    void saveHistoryToFile();                // 每次更新后保存到二进制文件
+    void updateHistoryTable();               // 刷新界面表格
+
+    // 添加一条新记录
+    void addHistoryRecord(const QString& plateID, double length, double thickness,
+                          double targetW, double avgW, double maxW, double minW);
 
 private slots:
     void onUpdateRawImage(const DualCameraChunk &chunk);

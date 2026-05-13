@@ -132,6 +132,9 @@ void frmView1::initForm() {
 
     adjustFontSize(ui->lineEdit);
     initCurveChart();
+
+    initHistoryUI();
+    loadHistoryFromFile();
 }
 
 void frmView1::adjustFontSize(QLineEdit* lineEdit) {
@@ -141,7 +144,7 @@ void frmView1::adjustFontSize(QLineEdit* lineEdit) {
 
     // 根据当前 lineEdit 的固定高度计算字号（0.6 是个经验值，防止字贴着边框）
     // 因为你已经在 UI 设计器里锁死了 Height，所以这里的 height() 获取到的是准确值
-    int newSize = lineEdit->height() * 0.6;
+    int newSize = lineEdit->height() * 1;
 
     if (newSize > 0) {
         font.setPixelSize(newSize);
@@ -275,34 +278,65 @@ void frmView1::onMeasureReady(const WidthResult &res)
     }
 
     if (res.isValid) {
-        // 条件A：算法看到了有效宽度
-        // 如果系统之前记录的状态是“没板子”，说明这是新板子的“板头”刚刚进入视野！
+        // --- 条件 A：算法识别到了钢板 ---
+
         if (!m_isPlatePresent) {
-            clearCurveChart();          // 瞬间清空上一张钢板的旧折线！
-            resetFusion();     // 清空全景图
-            m_isPlatePresent = true;    // 状态切换为：板子正在视野中
-            // qInfo() << ">>> 视觉检测到新钢板到达，折线已清空！ <<<";
+            // 【上升沿：新钢板刚刚到达！】
+            clearCurveChart();
+            resetFusion();
+            m_isPlatePresent = true;
+
+            // 💡【核心动作：补头】把缓存里的“老图”作为板头先拼进去！
+            for (int i = 0; i < m_preBufferList.size(); ++i) {
+                addFrameToFusion(m_preBufferList.at(i));
+            }
+            m_preBufferList.clear(); // 拼完立刻清空兜里的图
         }
 
-        // 只要能看到有效宽度，就把点画上去
+        // 正常画折线点
         addCurvePoint(res.widthValue);
 
-        addFrameToFusion(res.dispImage);
+        // 正常拼入当前帧
+        if (res.dispImage.IsInitialized()) {
+            addFrameToFusion(res.dispImage);
+        }
 
-        // 既然看到了板子，就把“空帧防抖计数器”清零
+        // 重置空帧计数器
         m_emptyFrameCount = 0;
 
     } else {
-        // 条件B：算法没看到有效宽度 (板子没来，或者板子走完了，或者被水汽挡住了)
+        // --- 条件 B：算法没看到钢板 ---
 
-        // 只有当系统认为当前有板子时，才开始累加空帧
         if (m_isPlatePresent) {
+            // 【当前状态是有钢板的，但这一帧瞎了（可能是有干扰，或者是板尾正在离开）】
             m_emptyFrameCount++;
 
-            // 如果连续 EMPTY_FRAME_LIMIT (3) 帧都没看到板子，说明板子的“板尾”彻底离开了
+            // 💡【核心动作：补尾】只要还没达到结束阈值，就把这帧空背景也拼进去当板尾！
+            if (res.dispImage.IsInitialized() && m_emptyFrameCount <= EMPTY_FRAME_LIMIT) {
+                addFrameToFusion(res.dispImage);
+            }
+
+            // 如果连续多帧没看到板子，说明板尾彻底走完了
             if (m_emptyFrameCount >= EMPTY_FRAME_LIMIT) {
-                m_isPlatePresent = false; // 状态彻底切换为：视野空闲，等待下一张板子
-                // qInfo() << ">>> 视觉检测到钢板已完全离开视野。 <<<";
+                m_isPlatePresent = false; // 状态彻底复位
+
+                // ... 此处保留你原有的：计算最大最小值、平均值，并存入本地前 5 条历史记录的代码 ...
+                // int pointCount = m_vecWidthValue.size();
+                // if (pointCount > 0) {
+                //     ...
+                // }
+            }
+
+        } else {
+            // 【当前视野里完全是空的，正在等待下一张新钢板】
+            // 💡【核心动作：蓄力板头】虽然是空画面，但它可能是下一张钢板的头！存起来！
+            if (res.dispImage.IsInitialized()) {
+                m_preBufferList.append(res.dispImage);
+
+                // 维持队列长度，踢出最老的图，永远只保留最近的 HEAD_FRAME_COUNT 张
+                while (m_preBufferList.size() > HEAD_FRAME_COUNT) {
+                    m_preBufferList.removeFirst();
+                }
             }
         }
     }
@@ -354,34 +388,139 @@ void frmView1::resetFusion() {
 void frmView1::addFrameToFusion(HalconCpp::HObject newFrame) {
     try {
         HalconCpp::HObject zoomedFrame;
-        HalconCpp::ZoomImageFactor(newFrame, &zoomedFrame, 0.1, 0.1, "bilinear");
+        HalconCpp::ZoomImageFactor(newFrame, &zoomedFrame, 1, 1, "bilinear");
 
         if (m_isFirstFrame) {
             m_hFusedImage = zoomedFrame;
             m_isFirstFrame = false;
         } else {
-            // 【核心算子】：拼接图像
-            // 将新帧 newFrame 追加到 m_hFusedImage 后面（垂直方向拼接）
-            // 参数 2 表示 2 帧，'vertical' 表示垂直堆叠
-            HalconCpp::HObject concatenated;
-            HalconCpp::ConcatObj(m_hFusedImage, zoomedFrame, &concatenated);
-            // 变成一列（即垂直拼接）
-            HalconCpp::TileImages(concatenated, &m_hFusedImage, 1, "vertical");
+            HalconCpp::HObject tempTuple;
+            // 【关键改变】：ConcatObj 拼接的是所有原始小图的集合
+            HalconCpp::ConcatObj(m_hFusedImage, zoomedFrame, &tempTuple);
+            m_hFusedImage = tempTuple;
         }
+        // 3. 对纯净的“图库集合”执行平铺
+        // 因为所有图尺寸一致，TileImages 会严丝合缝地把它们贴在一起！
+        HalconCpp::HObject fusedImage;
+        HalconCpp::TileImages(m_hFusedImage, &fusedImage, 1, "vertical");
 
-        // 【核心要求】：逆时针旋转 90 度显示
-        // 在 Halcon 中，正 90 度是逆时针
+        // 4. 逆时针旋转 90 度
         HalconCpp::HObject imageRotated;
-        HalconCpp::RotateImage(m_hFusedImage, &imageRotated, 90, "constant");
+        HalconCpp::RotateImage(fusedImage, &imageRotated, 90, "constant");
 
-        // --- 渲染到界面 ---
+        // --- 5. 渲染到界面 ---
         HTuple imgW, imgH;
         HalconCpp::GetImageSize(imageRotated, &imgW, &imgH);
-        // 设置显示比例，自适应窗口大小
+
         HalconCpp::SetPart(winHandle_fusion, 0, 0, imgH - 1, imgW - 1);
         HalconCpp::DispObj(imageRotated, winHandle_fusion);
 
     } catch (HalconCpp::HException &e) {
-        QLOG_ERROR() << "全景拼接/缩放失败: " << e.ErrorMessage().Text();
+        QLOG_ERROR() << "全景拼接失败: " << e.ErrorMessage().Text();
+    }
+}
+
+void frmView1::initHistoryUI()
+{
+    // 初始化标准表格模型
+    m_tableModelHistory = new QStandardItemModel(this);
+    QStringList headers = {"板号", "长度(mm)", "厚度(mm)", "设定宽度(mm)", "平均宽度(mm)", "最大宽度(mm)", "最小宽度(mm)"};
+    m_tableModelHistory->setHorizontalHeaderLabels(headers);
+
+    ui->tableView_history->setModel(m_tableModelHistory);
+    ui->tableView_history->setSelectionBehavior(QAbstractItemView::SelectRows);
+    ui->tableView_history->setEditTriggers(QAbstractItemView::NoEditTriggers); // 只读
+
+    QFont headerFont = ui->tableView_history->horizontalHeader()->font();
+    headerFont.setPointSize(14); // 这里填你想要的字号，比如 14 或 16
+    headerFont.setBold(true);    // 建议加粗，让表头更醒目
+    ui->tableView_history->horizontalHeader()->setFont(headerFont);
+
+    // 让列宽自动拉伸平分
+    ui->tableView_history->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+}
+
+void frmView1::loadHistoryFromFile()
+{
+    // 文件保存在程序运行目录下
+    QString filePath = QApplication::applicationDirPath() + "/history_data.dat";
+    QFile file(filePath);
+
+    if (file.exists() && file.open(QIODevice::ReadOnly)) {
+        QDataStream in(&file);
+        in.setVersion(QDataStream::Qt_5_0); // 确保版本兼容性
+        in >> m_historyList; // 一行代码直接把二进制文件还原成 QList
+        file.close();
+    }
+
+    // 加载完成后刷新一下界面
+    updateHistoryTable();
+}
+
+void frmView1::saveHistoryToFile()
+{
+    QString filePath = QApplication::applicationDirPath() + "/history_data.dat";
+    QFile file(filePath);
+
+    // 以只写模式打开，覆盖旧文件
+    if (file.open(QIODevice::WriteOnly)) {
+        QDataStream out(&file);
+        out.setVersion(QDataStream::Qt_5_0);
+        out << m_historyList; // 一行代码把 QList 变成二进制写入硬盘
+        file.close();
+    }
+}
+
+void frmView1::addHistoryRecord(const QString& plateID, double length, double thickness,
+                                double targetW, double avgW, double maxW, double minW)
+{
+    PlateRecord newRecord;
+    newRecord.plateID = plateID;
+    newRecord.length = length;
+    newRecord.thickness = thickness;
+    newRecord.targetWidth = targetW;
+    newRecord.avgWidth = avgW;
+    newRecord.maxWidth = maxW;
+    newRecord.minWidth = minW;
+
+    // 1. 将新记录插入到列表最前面（最新测的排在第一行）
+    m_historyList.prepend(newRecord);
+
+    // 2. 如果超过 5 条，就把最后面的老数据踢掉
+    while (m_historyList.size() > 5) {
+        m_historyList.removeLast();
+    }
+
+    // 3. 立即保存到本地文件
+    saveHistoryToFile();
+
+    // 4. 刷新界面表格
+    updateHistoryTable();
+}
+
+void frmView1::updateHistoryTable()
+{
+    // 清空现有表格内容（不清空表头）
+    m_tableModelHistory->setRowCount(0);
+
+    // 遍历内存中的那 5 条数据，填入表格
+    for (int i = 0; i < m_historyList.size(); ++i) {
+        const PlateRecord &rec = m_historyList.at(i);
+
+        QList<QStandardItem *> rowItems;
+        rowItems << new QStandardItem(rec.plateID);
+        rowItems << new QStandardItem(QString::number(rec.length, 'f', 1));
+        rowItems << new QStandardItem(QString::number(rec.thickness, 'f', 2));
+        rowItems << new QStandardItem(QString::number(rec.targetWidth, 'f', 1));
+        rowItems << new QStandardItem(QString::number(rec.avgWidth, 'f', 2));
+        rowItems << new QStandardItem(QString::number(rec.maxWidth, 'f', 2));
+        rowItems << new QStandardItem(QString::number(rec.minWidth, 'f', 2));
+
+        // 让文字居中显示更美观
+        for(auto item : rowItems) {
+            item->setTextAlignment(Qt::AlignCenter);
+        }
+
+        m_tableModelHistory->appendRow(rowItems);
     }
 }
