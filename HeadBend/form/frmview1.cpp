@@ -147,26 +147,43 @@ void frmView1::initForm() {
     m_isPlatePresent = false;
     m_emptyFrameCount = 0;
 
-    adjustFontSize(ui->lineEdit);
+    adjustFontSize(ui->lineEdit,76,40);   // 实时宽度
+    adjustFontSize(ui->lineEdit_3,35,26); // 平均宽度
+    adjustFontSize(ui->lineEdit_4,35,26); // 长度
+    adjustFontSize(ui->lineEdit_8,35,26); // 最大宽度
+    adjustFontSize(ui->lineEdit_9,35,26); // 最小宽度
+    adjustFontSize(ui->lineEdit_5,76,40);ui->lineEdit_5->setText("0.00");
+    adjustFontSize(ui->lineEdit_6,76,40);ui->lineEdit_6->setText("0.00");
+    adjustFontSize(ui->lineEdit_7,76,24);ui->lineEdit_7->setText("ABCDEFG");
+
     initCurveChart();
 
     initHistoryUI();
     loadHistoryFromFile();
 }
 
-void frmView1::adjustFontSize(QLineEdit* lineEdit) {
+void frmView1::adjustFontSize(QLineEdit* lineEdit, int h, int fontSize) {
     if (!lineEdit) return; // 安全检查
 
-    QFont font = lineEdit->font();
+    // 1. 绝对锁死尺寸：剥夺布局器自动拉伸它的权利
+    lineEdit->setFixedHeight(h);
 
-    // 根据当前 lineEdit 的固定高度计算字号（0.6 是个经验值，防止字贴着边框）
-    // 因为你已经在 UI 设计器里锁死了 Height，所以这里的 height() 获取到的是准确值
-    int newSize = lineEdit->height() * 1;
-
-    if (newSize > 0) {
-        font.setPixelSize(newSize);
-        lineEdit->setFont(font);
+    // 如果你连宽度都不想让它变，可以把宽也锁死，比如获取当前的最小宽度
+    if (lineEdit->minimumWidth() > 0) {
+        lineEdit->setFixedWidth(lineEdit->minimumWidth());
     }
+
+    // 2. 清除内边距：防止字变大后被框的上下边缘切掉
+    // QLineEdit 默认上下是有 padding 的。既然框不让变大，我们就要榨干内部空间
+    QString currentStyle = lineEdit->styleSheet();
+    lineEdit->setStyleSheet(currentStyle + "QLineEdit { padding: 0px; margin: 0px; }");
+
+    // 3. 设置大字体
+    QFont font = lineEdit->font();
+    // 框高是 35，字号设为 24~26 是极限，既足够大又不会越界
+    font.setPixelSize(fontSize);
+    font.setBold(true); // 加粗更醒目
+    lineEdit->setFont(font);
 }
 
 void frmView1::onUpdateRawImage(const DualCameraChunk &chunk) {
@@ -279,7 +296,7 @@ void frmView1::clearCurveChart()
     ui->customPlot_width->graph(0)->data()->clear();
 
     // 恢复默认 X 轴显示范围
-    ui->customPlot_width->xAxis->setRange(0, 15);
+    ui->customPlot_width->xAxis->setRange(0, 30);
 
     // 重绘以消除上一张板的线
     ui->customPlot_width->replot();
@@ -1125,7 +1142,7 @@ void frmView1::initCurveChart()
     ui->customPlot_width->yAxis->setLabel("宽度尺寸 (mm)");
 
     // 设置默认的坐标轴范围
-    ui->customPlot_width->xAxis->setRange(0, 15);
+    ui->customPlot_width->xAxis->setRange(0, 30);
     ui->customPlot_width->yAxis->setRange(1000, 2500);
 
     // 允许用户用鼠标拖拽和缩放图表

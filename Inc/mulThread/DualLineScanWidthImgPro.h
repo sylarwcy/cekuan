@@ -1,6 +1,7 @@
 #pragma once
 #include "ImageProcessor.h"
 #include <QMap>
+#include <QVector>
 #include "workStationDataStructure.h"
 
 class DualLineScanWidthImgPro {
@@ -18,6 +19,7 @@ private:
     bool m_isInitialized{false};
     double m_encoder_mm_per_row{0.09473}; // 线阵走带当量
     HalconCpp::HObject m_hMasterBuffer;
+    HalconCpp::HObject m_hSlaveBuffer;
 
     // 【新增】：记录最后的裁切窗口位置，用于在无钢板时刷新背景
     int m_lastCropS_X{1000};

@@ -73,7 +73,7 @@ public:
 
 private:
     // 【新增】：自适应字体大小的工具函数声明
-    void adjustFontSize(QLineEdit* lineEdit);
+    void adjustFontSize(QLineEdit* lineEdit, int h, int fontSize);
 
     // --- 曲线图相关缓存数据 ---
     QVector<double> m_vecFrameIndex; // X轴数据：第几帧/第几次测量
