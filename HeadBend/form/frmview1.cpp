@@ -99,6 +99,17 @@ void frmView1::varInit() {
     ui->gView_front_pro->setAttribute(Qt::WA_OpaquePaintEvent);
     ui->gView_back_ori->setAttribute(Qt::WA_OpaquePaintEvent);
 
+    // 初始化头部显示窗口
+    Hlong winId_front = (Hlong)ui->graphicsView_front->winId();
+    HalconCpp::SetWindowAttr("background_color", "black");
+    HalconCpp::OpenWindow(0, 0, ui->graphicsView_front->width(), ui->graphicsView_front->height(),
+                          winId_front, "visible", "", &winHandle_front);
+
+    // 初始化尾部显示窗口
+    Hlong winId_back = (Hlong)ui->graphicsView_back->winId();
+    HalconCpp::SetWindowAttr("background_color", "black");
+    HalconCpp::OpenWindow(0, 0, ui->graphicsView_back->width(), ui->graphicsView_back->height(),
+                          winId_back, "visible", "", &winHandle_back);
     //启动界面刷新
     startDispRefresh();
 }
@@ -126,6 +137,12 @@ void frmView1::initForm() {
     ui->frame_thickness->setStyleSheet(QString("#frame_thickness { %1 }").arg(noBorderStyle));
     ui->frame_search->setStyleSheet(QString("#frame_search { %1 }").arg(noBorderStyle));
 
+    ui->graphicsView_front->setStyleSheet(QString("#graphicsView_front { %1 }").arg(noBorderStyle));
+    ui->graphicsView_back->setStyleSheet(QString("#graphicsView_back { %1 }").arg(noBorderStyle));
+
+    // 防止闪烁
+    ui->graphicsView_front->setAttribute(Qt::WA_OpaquePaintEvent);
+    ui->graphicsView_back->setAttribute(Qt::WA_OpaquePaintEvent);
     // 初始化视觉触发状态机
     m_isPlatePresent = false;
     m_emptyFrameCount = 0;
@@ -186,43 +203,43 @@ void frmView1::startDispRefresh() {
     QLOG_INFO() << "触发进程启动，开始刷新界面...";
 }
 
-void frmView1::initCurveChart()
-{
-    m_currentFrameCount = 0;
+// void frmView1::initCurveChart()
+// {
+//     m_currentFrameCount = 0;
 
-    // 1. 基本背景颜色设置 (深灰黑色背景，适应你的工业UI皮肤)
-    ui->customPlot_width->setBackground(QBrush(QColor(30, 30, 30)));
-    ui->customPlot_width->axisRect()->setBackground(QBrush(QColor(20, 20, 20)));
+//     // 1. 基本背景颜色设置 (深灰黑色背景，适应你的工业UI皮肤)
+//     ui->customPlot_width->setBackground(QBrush(QColor(30, 30, 30)));
+//     ui->customPlot_width->axisRect()->setBackground(QBrush(QColor(20, 20, 20)));
 
-    // 2. 添加一条折线 (Graph 0)
-    ui->customPlot_width->addGraph();
-    // 设置折线颜色为荧光绿，线宽为 2
-    ui->customPlot_width->graph(0)->setPen(QPen(QColor(0, 255, 0), 2));
-    // 设置数据点显示为实心小圆圈
-    ui->customPlot_width->graph(0)->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssDisc, 4));
+//     // 2. 添加一条折线 (Graph 0)
+//     ui->customPlot_width->addGraph();
+//     // 设置折线颜色为荧光绿，线宽为 2
+//     ui->customPlot_width->graph(0)->setPen(QPen(QColor(0, 255, 0), 2));
+//     // 设置数据点显示为实心小圆圈
+//     ui->customPlot_width->graph(0)->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssDisc, 4));
 
-    // 3. X 轴和 Y 轴的标签和颜色
-    ui->customPlot_width->xAxis->setLabelColor(Qt::white);
-    ui->customPlot_width->xAxis->setTickLabelColor(Qt::white);
-    ui->customPlot_width->xAxis->setBasePen(QPen(Qt::white));
-    ui->customPlot_width->xAxis->setTickPen(QPen(Qt::white));
-    ui->customPlot_width->xAxis->setSubTickPen(QPen(Qt::white));
-    ui->customPlot_width->xAxis->setLabel("图像帧数 (Frame)");
+//     // 3. X 轴和 Y 轴的标签和颜色
+//     ui->customPlot_width->xAxis->setLabelColor(Qt::white);
+//     ui->customPlot_width->xAxis->setTickLabelColor(Qt::white);
+//     ui->customPlot_width->xAxis->setBasePen(QPen(Qt::white));
+//     ui->customPlot_width->xAxis->setTickPen(QPen(Qt::white));
+//     ui->customPlot_width->xAxis->setSubTickPen(QPen(Qt::white));
+//     ui->customPlot_width->xAxis->setLabel("图像帧数 (Frame)");
 
-    ui->customPlot_width->yAxis->setLabelColor(Qt::white);
-    ui->customPlot_width->yAxis->setTickLabelColor(Qt::white);
-    ui->customPlot_width->yAxis->setBasePen(QPen(Qt::white));
-    ui->customPlot_width->yAxis->setTickPen(QPen(Qt::white));
-    ui->customPlot_width->yAxis->setSubTickPen(QPen(Qt::white));
-    ui->customPlot_width->yAxis->setLabel("宽度尺寸 (mm)");
+//     ui->customPlot_width->yAxis->setLabelColor(Qt::white);
+//     ui->customPlot_width->yAxis->setTickLabelColor(Qt::white);
+//     ui->customPlot_width->yAxis->setBasePen(QPen(Qt::white));
+//     ui->customPlot_width->yAxis->setTickPen(QPen(Qt::white));
+//     ui->customPlot_width->yAxis->setSubTickPen(QPen(Qt::white));
+//     ui->customPlot_width->yAxis->setLabel("宽度尺寸 (mm)");
 
-    // 4. 设置默认的坐标轴范围
-    ui->customPlot_width->xAxis->setRange(0, 15);     // 假设一张钢板默认拍15张
-    ui->customPlot_width->yAxis->setRange(1000, 2500); // 宽度根据你实际板宽预设个大概范围
+//     // 4. 设置默认的坐标轴范围
+//     ui->customPlot_width->xAxis->setRange(0, 15);     // 假设一张钢板默认拍15张
+//     ui->customPlot_width->yAxis->setRange(1000, 2500); // 宽度根据你实际板宽预设个大概范围
 
-    // 5. 允许用户用鼠标拖拽和缩放图表 (超级好用的功能！)
-    ui->customPlot_width->setInteractions(QCP::iRangeDrag | QCP::iRangeZoom);
-}
+//     // 5. 允许用户用鼠标拖拽和缩放图表 (超级好用的功能！)
+//     ui->customPlot_width->setInteractions(QCP::iRangeDrag | QCP::iRangeZoom);
+// }
 
 void frmView1::addCurvePoint(double widthValue)
 {
@@ -268,72 +285,605 @@ void frmView1::clearCurveChart()
     ui->customPlot_width->replot();
 }
 
+// void frmView1::onMeasureReady(const WidthResult &res)
+// {
+//     // 这里的 lineEdit 就是你新 UI 里负责显示宽度的控件
+//     if (res.isValid) {// 只有测量成功了才画点 & 显示宽度
+//         ui->lineEdit->setText(QString::number(res.widthValue, 'f', 2));
+//     } else {
+//         ui->lineEdit->setText("0.00");
+//     }
+
+//     if (res.isValid) {
+//         // --- 条件 A：算法识别到了钢板 ---
+
+//         if (!m_isPlatePresent) {
+//             // 【上升沿：新钢板刚刚到达！】
+//             clearCurveChart();
+//             resetFusion();
+//             m_isPlatePresent = true;
+
+//             // 💡【核心动作：补头】把缓存里的“老图”作为板头先拼进去！
+//             for (int i = 0; i < m_preBufferList.size(); ++i) {
+//                 addFrameToFusion(m_preBufferList.at(i));
+//             }
+//             m_preBufferList.clear(); // 拼完立刻清空兜里的图
+//         }
+
+//         // 正常画折线点
+//         addCurvePoint(res.widthValue);
+
+//         // 正常拼入当前帧
+//         if (res.dispImage.IsInitialized()) {
+//             addFrameToFusion(res.dispImage);
+//         }
+
+//         // 重置空帧计数器
+//         m_emptyFrameCount = 0;
+
+//     } else {
+//         // --- 条件 B：算法没看到钢板 ---
+
+//         if (m_isPlatePresent) {
+//             // 【当前状态是有钢板的，但这一帧瞎了（可能是有干扰，或者是板尾正在离开）】
+//             m_emptyFrameCount++;
+
+//             // 💡【核心动作：补尾】只要还没达到结束阈值，就把这帧空背景也拼进去当板尾！
+//             if (res.dispImage.IsInitialized() && m_emptyFrameCount <= EMPTY_FRAME_LIMIT) {
+//                 addFrameToFusion(res.dispImage);
+//             }
+
+//             // 如果连续多帧没看到板子，说明板尾彻底走完了
+//             if (m_emptyFrameCount >= EMPTY_FRAME_LIMIT) {
+//                 m_isPlatePresent = false; // 状态彻底复位
+
+//                 // ... 此处保留你原有的：计算最大最小值、平均值，并存入本地前 5 条历史记录的代码 ...
+//                 // int pointCount = m_vecWidthValue.size();
+//                 // if (pointCount > 0) {
+//                 //     ...
+//                 // }
+//             }
+
+//         } else {
+//             // 【当前视野里完全是空的，正在等待下一张新钢板】
+//             // 💡【核心动作：蓄力板头】虽然是空画面，但它可能是下一张钢板的头！存起来！
+//             if (res.dispImage.IsInitialized()) {
+//                 m_preBufferList.append(res.dispImage);
+
+//                 // 维持队列长度，踢出最老的图，永远只保留最近的 HEAD_FRAME_COUNT 张
+//                 while (m_preBufferList.size() > HEAD_FRAME_COUNT) {
+//                     m_preBufferList.removeFirst();
+//                 }
+//             }
+//         }
+//     }
+
+//     if (res.dispImage.IsInitialized()) {
+//         try {
+//             HTuple currentWin = this->winHandle_cam1_pro;
+//             HTuple imgW, imgH;
+//             HalconCpp::GetImageSize(res.dispImage, &imgW, &imgH);
+//             HalconCpp::SetPart(currentWin, 0, 0, imgH - 1, imgW - 1);
+//             HalconCpp::DispObj(res.dispImage, currentWin);
+
+//             if (res.isValid && res.renderLeftX != -1) {
+//                 HalconCpp::SetLineWidth(currentWin, 2);
+
+//                 HalconCpp::SetColor(currentWin, "green");
+//                 HalconCpp::DispLine(currentWin, 0, res.renderLeftX, imgH - 1, res.renderLeftX);
+
+//                 HalconCpp::SetColor(currentWin, "cyan");
+//                 HalconCpp::DispLine(currentWin, 0, res.renderRightX, imgH - 1, res.renderRightX);
+
+//                 HalconCpp::SetColor(currentWin, "red");
+//                 HalconCpp::DispCross(currentWin, res.renderY, res.renderLeftX, 60, 0);
+//                 HalconCpp::DispCross(currentWin, res.renderY, res.renderRightX, 60, 0);
+
+//                 QString widthStr = QString("Physical Width: %1 mm").arg(res.widthValue, 0, 'f', 3);
+//                 HalconCpp::DispText(currentWin, widthStr.toLocal8Bit().constData(),
+//                                     "window", 20, 20, "red", HTuple(), HTuple());
+
+//                 QString yawStr = QString("Yaw Angle: %1 deg").arg(res.yawAngle, 0, 'f', 2);
+//                 HalconCpp::DispText(currentWin, yawStr.toLocal8Bit().constData(),
+//                                     "window", 50, 20, "yellow", HTuple(), HTuple());
+//             } else {
+//                 HalconCpp::DispText(currentWin, "NO PLATE DETECTED",
+//                                     "window", "center", "center", "red", HTuple(), HTuple());
+//             }
+
+//         } catch (HalconCpp::HException &e) {
+//             qWarning() << "[UI渲染报错] " << e.ErrorMessage().Text();
+//         }
+//     }
+// }
+
+// void frmView1::onMeasureReady(const WidthResult &res)
+// {
+//     // 1. 实时显示当前帧宽度 (顶部显示)
+//     if (res.isValid) {
+//         ui->lineEdit->setText(QString::number(res.widthValue, 'f', 2));
+//     } else {
+//         ui->lineEdit->setText("0.00");
+//     }
+
+//     // =========================================================
+//     // 2. 核心逻辑与状态机 (包含统计、图表、全景拼接)
+//     // =========================================================
+//     if (res.isValid) {
+//         // --- 条件 A：算法识别到了钢板 ---
+
+//         if (!m_isPlatePresent) {
+//             // 【上升沿：新钢板刚刚到达！】
+//             clearCurveChart();
+//             resetFusion();
+//             m_isPlatePresent = true;
+
+//             // 💡 新增：初始化所有长宽统计变量
+//             m_sumWidth = 0.0;
+//             m_validFrameCount = 0;
+//             m_totalRows = 0;
+//             m_maxWidth = 0.0;
+//             m_minWidth = 99999.0;
+
+//             // 💡【核心动作：补头】把缓存里的“老图”作为板头先拼进去！
+//             for (int i = 0; i < m_preBufferList.size(); ++i) {
+//                 addFrameToFusion(m_preBufferList.at(i));
+//             }
+//             m_preBufferList.clear(); // 拼完立刻清空兜里的图
+//         }
+
+//         // --- 💡 新增：累加统计数据 ---
+//         m_sumWidth += res.widthValue;
+//         m_validFrameCount++;
+
+//         if (res.widthValue > m_maxWidth) {
+//             m_maxWidth = res.widthValue;
+//         }
+//         if (res.widthValue < m_minWidth) {
+//             m_minWidth = res.widthValue;
+//         }
+
+//         // 正常画折线点
+//         addCurvePoint(res.widthValue);
+
+//         // 正常拼入当前帧，并累加行数
+//         if (res.dispImage.IsInitialized()) {
+//             HTuple w, h;
+//             HalconCpp::GetImageSize(res.dispImage, &w, &h);
+//             m_totalRows += h[0].I(); // 累加当前帧的行数用于算长度
+//             addFrameToFusion(res.dispImage);
+//         }
+
+//         // 重置空帧计数器
+//         m_emptyFrameCount = 0;
+
+//     } else {
+//         // --- 条件 B：算法没看到钢板 ---
+
+//         if (m_isPlatePresent) {
+//             // 【当前状态是有钢板的，但这一帧瞎了（可能是有干扰，或者是板尾正在离开）】
+//             m_emptyFrameCount++;
+
+//             // 💡【核心动作：补尾】只要还没达到结束阈值，就把这帧空背景也拼进去当板尾！
+//             if (res.dispImage.IsInitialized() && m_emptyFrameCount <= EMPTY_FRAME_LIMIT) {
+//                 HTuple w, h;
+//                 HalconCpp::GetImageSize(res.dispImage, &w, &h);
+//                 m_totalRows += h[0].I(); // 补尾的图行数也算入总长度
+//                 addFrameToFusion(res.dispImage);
+//             }
+
+//             // 如果连续多帧没看到板子，说明板尾彻底走完了
+//             if (m_emptyFrameCount >= EMPTY_FRAME_LIMIT) {
+//                 m_isPlatePresent = false; // 状态彻底复位
+
+//                 // --- 💡 新增：出尾时计算并更新 UI 面板 ---
+//                 if (m_validFrameCount > 0) {
+//                     double avgWidth = m_sumWidth / m_validFrameCount;
+
+//                     // ⚠️ 这里是你的编码器分辨率(毫米/行)，假设是 1.0mm，请根据实际标定修改
+//                     double y_resolution = 1.0;
+//                     double totalLength = m_totalRows * y_resolution;
+
+//                     // 更新右下角或底部指定的 4 个 lineEdit
+//                     ui->lineEdit_4->setText(QString::number(totalLength, 'f', 2)); // 长度
+//                     ui->lineEdit_3->setText(QString::number(avgWidth, 'f', 2));    // 平均宽度
+//                     ui->lineEdit_8->setText(QString::number(m_maxWidth, 'f', 2));  // 最大宽度
+//                     ui->lineEdit_9->setText(QString::number(m_minWidth, 'f', 2));  // 最小宽度
+
+//                     // 自动存入下方历史记录并保存到本地
+//                     // 获取当前板号，如果有对应的输入框可以替换掉 "Unknown"，比如 ui->lineEdit_steelnum->text()
+//                     QString plateID = "Unknown";
+//                     addHistoryRecord(plateID, totalLength, 0.0, 0.0, avgWidth, m_maxWidth, m_minWidth);
+//                 }
+//             }
+
+//         } else {
+//             // 【当前视野里完全是空的，正在等待下一张新钢板】
+//             // 💡【核心动作：蓄力板头】虽然是空画面，但它可能是下一张钢板的头！存起来！
+//             if (res.dispImage.IsInitialized()) {
+//                 m_preBufferList.append(res.dispImage);
+
+//                 // 维持队列长度，踢出最老的图，永远只保留最近的 HEAD_FRAME_COUNT 张
+//                 while (m_preBufferList.size() > HEAD_FRAME_COUNT) {
+//                     m_preBufferList.removeFirst();
+//                 }
+//             }
+//         }
+//     }
+
+//     // =========================================================
+//     // 3. 渲染 Halcon 画线坐标 (保持你原有的逻辑不变)
+//     // =========================================================
+//     if (res.dispImage.IsInitialized()) {
+//         try {
+//             HTuple currentWin = this->winHandle_cam1_pro;
+//             HTuple imgW, imgH;
+//             HalconCpp::GetImageSize(res.dispImage, &imgW, &imgH);
+//             HalconCpp::SetPart(currentWin, 0, 0, imgH - 1, imgW - 1);
+//             HalconCpp::DispObj(res.dispImage, currentWin);
+
+//             if (res.isValid && res.renderLeftX != -1) {
+//                 HalconCpp::SetLineWidth(currentWin, 2);
+
+//                 HalconCpp::SetColor(currentWin, "green");
+//                 HalconCpp::DispLine(currentWin, 0, res.renderLeftX, imgH - 1, res.renderLeftX);
+
+//                 HalconCpp::SetColor(currentWin, "cyan");
+//                 HalconCpp::DispLine(currentWin, 0, res.renderRightX, imgH - 1, res.renderRightX);
+
+//                 HalconCpp::SetColor(currentWin, "red");
+//                 HalconCpp::DispCross(currentWin, res.renderY, res.renderLeftX, 60, 0);
+//                 HalconCpp::DispCross(currentWin, res.renderY, res.renderRightX, 60, 0);
+
+//                 QString widthStr = QString("Physical Width: %1 mm").arg(res.widthValue, 0, 'f', 3);
+//                 HalconCpp::DispText(currentWin, widthStr.toLocal8Bit().constData(),
+//                                     "window", 20, 20, "red", HTuple(), HTuple());
+
+//                 QString yawStr = QString("Yaw Angle: %1 deg").arg(res.yawAngle, 0, 'f', 2);
+//                 HalconCpp::DispText(currentWin, yawStr.toLocal8Bit().constData(),
+//                                     "window", 50, 20, "yellow", HTuple(), HTuple());
+//             } else {
+//                 HalconCpp::DispText(currentWin, "NO PLATE DETECTED",
+//                                     "window", "center", "center", "red", HTuple(), HTuple());
+//             }
+
+//         } catch (HalconCpp::HException &e) {
+//             qWarning() << "[UI渲染报错] " << e.ErrorMessage().Text();
+//         }
+//     }
+// }
+// void frmView1::onMeasureReady(const WidthResult &res)
+// {
+//     // =========================================================
+//     // 1. 顶部实时显示当前帧宽度
+//     // =========================================================
+//     if (res.isValid) {
+//         ui->lineEdit->setText(QString::number(res.widthValue, 'f', 2));
+//     } else {
+//         ui->lineEdit->setText("0.00");
+//     }
+
+//     // =========================================================
+//     // 2. 核心逻辑与状态机 (统计、头尾冻结、全景拼接)
+//     // =========================================================
+//     if (res.isValid) {
+//         // --- 条件 A：算法识别到了钢板 ---
+
+//         if (!m_isPlatePresent) {
+//             // 【上升沿：新钢板刚刚到达！】
+//             clearCurveChart();
+//             resetFusion();
+//             m_isPlatePresent = true;
+
+//             // 1. 初始化统计变量
+//             m_sumWidth = 0.0;
+//             m_validFrameCount = 0;
+//             m_totalRows = 0;
+//             m_maxWidth = 0.0;
+//             m_minWidth = 99999.0;
+
+//             // 2. 💡【新增：头部画面冻结】显示入头的第一帧
+//             if (res.dispImage.IsInitialized()) {
+//                 try {
+//                     HTuple w, h;
+//                     HalconCpp::GetImageSize(res.dispImage, &w, &h);
+//                     HalconCpp::SetPart(winHandle_front, 0, 0, h - 1, w - 1);
+//                     HalconCpp::DispObj(res.dispImage, winHandle_front);
+//                 } catch (...) { /* 忽略偶发绘制错误 */ }
+//             }
+
+//             // 3. 补头：把缓存里的老图拼进去
+//             for (int i = 0; i < m_preBufferList.size(); ++i) {
+//                 addFrameToFusion(m_preBufferList.at(i));
+//             }
+//             m_preBufferList.clear();
+//         }
+
+//         // --- 累加统计数据 ---
+//         m_sumWidth += res.widthValue;
+//         m_validFrameCount++;
+
+//         if (res.widthValue > m_maxWidth) {
+//             m_maxWidth = res.widthValue;
+//         }
+//         if (res.widthValue < m_minWidth) {
+//             m_minWidth = res.widthValue;
+//         }
+
+//         // --- 记录当前有效帧，作为“潜在的尾部图” ---
+//         if (res.dispImage.IsInitialized()) {
+//             m_hLastValidImage = res.dispImage;
+
+//             // 正常拼入当前帧并累加行数用于算长度
+//             HTuple w, h;
+//             HalconCpp::GetImageSize(res.dispImage, &w, &h);
+//             m_totalRows += h[0].I();
+//             addFrameToFusion(res.dispImage);
+//         }
+
+//         // 正常画折线点
+//         addCurvePoint(res.widthValue);
+
+//         // 重置空帧计数器
+//         m_emptyFrameCount = 0;
+
+//     } else {
+//         // --- 条件 B：算法没看到钢板 ---
+
+//         if (m_isPlatePresent) {
+//             // 【当前状态是有钢板的，但这一帧瞎了（可能正在出尾）】
+//             m_emptyFrameCount++;
+
+//             // 只要没达到结束阈值，就把这帧空图也拼进去当板尾
+//             if (res.dispImage.IsInitialized() && m_emptyFrameCount <= EMPTY_FRAME_LIMIT) {
+//                 HTuple w, h;
+//                 HalconCpp::GetImageSize(res.dispImage, &w, &h);
+//                 m_totalRows += h[0].I(); // 补尾的图也算入总长度
+//                 addFrameToFusion(res.dispImage);
+//             }
+
+//             // 【下降沿：钢板彻底走完！】
+//             if (m_emptyFrameCount >= EMPTY_FRAME_LIMIT) {
+//                 m_isPlatePresent = false; // 状态彻底复位
+
+//                 // 1. 💡【新增：尾部画面冻结】显示记录的最后一帧清晰画面
+//                 if (m_hLastValidImage.IsInitialized()) {
+//                     try {
+//                         HTuple w, h;
+//                         HalconCpp::GetImageSize(m_hLastValidImage, &w, &h);
+//                         HalconCpp::SetPart(winHandle_back, 0, 0, h - 1, w - 1);
+//                         HalconCpp::DispObj(m_hLastValidImage, winHandle_back);
+//                     } catch (...) { /* 忽略偶发绘制错误 */ }
+//                 }
+
+//                 // 2. 出尾时计算并更新 UI 面板统计数据
+//                 if (m_validFrameCount > 0) {
+//                     double avgWidth = m_sumWidth / m_validFrameCount;
+
+//                     // ⚠️ 这里是你的编码器分辨率(毫米/行)，假设是 1.0mm，请根据实际标定修改
+//                     double y_resolution = 1.0;
+//                     double totalLength = m_totalRows * y_resolution;
+
+//                     // 更新右下角或底部指定的 4 个 lineEdit
+//                     ui->lineEdit_4->setText(QString::number(totalLength, 'f', 2)); // 长度
+//                     ui->lineEdit_3->setText(QString::number(avgWidth, 'f', 2));    // 平均宽度
+//                     ui->lineEdit_8->setText(QString::number(m_maxWidth, 'f', 2));  // 最大宽度
+//                     ui->lineEdit_9->setText(QString::number(m_minWidth, 'f', 2));  // 最小宽度
+
+//                     // 3. 自动存入下方历史记录并保存到本地
+//                     // 获取当前板号，如果没有特定输入框就暂写为 "Unknown" 或按时间生成
+//                     QString plateID = QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss");
+//                     addHistoryRecord(plateID, totalLength, 0.0, 0.0, avgWidth, m_maxWidth, m_minWidth);
+//                 }
+//             }
+
+//         } else {
+//             // 【当前视野里完全是空的，正在等待下一张新钢板】
+//             // 蓄力板头：存下背景图备用
+//             if (res.dispImage.IsInitialized()) {
+//                 m_preBufferList.append(res.dispImage);
+//                 // 维持队列长度，永远只保留最近的 HEAD_FRAME_COUNT 张
+//                 while (m_preBufferList.size() > HEAD_FRAME_COUNT) {
+//                     m_preBufferList.removeFirst();
+//                 }
+//             }
+//         }
+//     }
+
+//     // =========================================================
+//     // 3. 渲染 Halcon 画线坐标 (基于全尺寸拼接图)
+//     // =========================================================
+//     if (res.dispImage.IsInitialized()) {
+//         try {
+//             HTuple currentWin = this->winHandle_cam1_pro;
+//             HTuple imgW, imgH;
+//             HalconCpp::GetImageSize(res.dispImage, &imgW, &imgH);
+//             HalconCpp::SetPart(currentWin, 0, 0, imgH - 1, imgW - 1);
+//             HalconCpp::DispObj(res.dispImage, currentWin);
+
+//             if (res.isValid && res.renderLeftX != -1) {
+//                 HalconCpp::SetLineWidth(currentWin, 2);
+
+//                 // 画左边线
+//                 HalconCpp::SetColor(currentWin, "green");
+//                 HalconCpp::DispLine(currentWin, 0, res.renderLeftX, imgH - 1, res.renderLeftX);
+
+//                 // 画右边线
+//                 HalconCpp::SetColor(currentWin, "cyan");
+//                 HalconCpp::DispLine(currentWin, 0, res.renderRightX, imgH - 1, res.renderRightX);
+
+//                 // 画测量点十字
+//                 HalconCpp::SetColor(currentWin, "red");
+//                 HalconCpp::DispCross(currentWin, res.renderY, res.renderLeftX, 60, 0);
+//                 HalconCpp::DispCross(currentWin, res.renderY, res.renderRightX, 60, 0);
+
+//                 // 显示宽度文字
+//                 QString widthStr = QString("Physical Width: %1 mm").arg(res.widthValue, 0, 'f', 3);
+//                 HalconCpp::DispText(currentWin, widthStr.toLocal8Bit().constData(),
+//                                     "window", 20, 20, "red", HTuple(), HTuple());
+
+//                 // 显示偏航角文字
+//                 QString yawStr = QString("Yaw Angle: %1 deg").arg(res.yawAngle, 0, 'f', 2);
+//                 HalconCpp::DispText(currentWin, yawStr.toLocal8Bit().constData(),
+//                                     "window", 50, 20, "yellow", HTuple(), HTuple());
+//             } else {
+//                 // 没有物料时屏幕中间提示红字
+//                 HalconCpp::DispText(currentWin, "NO PLATE DETECTED",
+//                                     "window", "center", "center", "red", HTuple(), HTuple());
+//             }
+
+//         } catch (HalconCpp::HException &e) {
+//             qWarning() << "[UI渲染报错] " << e.ErrorMessage().Text();
+//         }
+//     }
+// }
 void frmView1::onMeasureReady(const WidthResult &res)
 {
-    // 这里的 lineEdit 就是你新 UI 里负责显示宽度的控件
-    if (res.isValid) {// 只有测量成功了才画点 & 显示宽度
+    // =========================================================
+    // 1. 顶部实时显示当前帧宽度
+    // =========================================================
+    if (res.isValid) {
         ui->lineEdit->setText(QString::number(res.widthValue, 'f', 2));
     } else {
         ui->lineEdit->setText("0.00");
     }
 
+    // =========================================================
+    // 2. 核心逻辑与状态机 (统计、头尾冻结、异常过滤、全景拼接)
+    // =========================================================
     if (res.isValid) {
-        // --- 条件 A：算法识别到了钢板 ---
+        // --- 条件 A：算法识别到了边缘 ---
 
         if (!m_isPlatePresent) {
-            // 【上升沿：新钢板刚刚到达！】
+            // 【上升沿：新物体刚刚到达！】
             clearCurveChart();
             resetFusion();
             m_isPlatePresent = true;
 
-            // 💡【核心动作：补头】把缓存里的“老图”作为板头先拼进去！
+            // 1. 初始化统计变量
+            m_sumWidth = 0.0;
+            m_validFrameCount = 0;
+            m_totalRows = 0;
+            m_maxWidth = 0.0;
+            m_minWidth = 99999.0;
+
+            // 2. 【头部画面冻结】显示入头的第一帧
+            if (res.dispImage.IsInitialized()) {
+                try {
+                    HTuple w, h;
+                    HalconCpp::GetImageSize(res.dispImage, &w, &h);
+                    HalconCpp::SetPart(winHandle_front, 0, 0, h - 1, w - 1);
+                    HalconCpp::DispObj(res.dispImage, winHandle_front);
+                } catch (...) { /* 忽略偶发绘制错误 */ }
+            }
+
+            // 3. 补头：把缓存里的老图拼进全景图
             for (int i = 0; i < m_preBufferList.size(); ++i) {
                 addFrameToFusion(m_preBufferList.at(i));
             }
-            m_preBufferList.clear(); // 拼完立刻清空兜里的图
+            m_preBufferList.clear();
         }
 
-        // 正常画折线点
-        addCurvePoint(res.widthValue);
+        // --- 累加统计数据 ---
+        m_sumWidth += res.widthValue;
+        m_validFrameCount++;
 
-        // 正常拼入当前帧
+        if (res.widthValue > m_maxWidth) {
+            m_maxWidth = res.widthValue;
+        }
+        if (res.widthValue < m_minWidth) {
+            m_minWidth = res.widthValue;
+        }
+
+        // --- 记录当前有效帧，作为“潜在的尾部图” ---
         if (res.dispImage.IsInitialized()) {
+            m_hLastValidImage = res.dispImage;
+
+            // 正常拼入当前帧并累加行数用于算长度
+            HTuple w, h;
+            HalconCpp::GetImageSize(res.dispImage, &w, &h);
+            m_totalRows += h[0].I();
             addFrameToFusion(res.dispImage);
         }
+
+        // 画折线点
+        addCurvePoint(res.widthValue);
 
         // 重置空帧计数器
         m_emptyFrameCount = 0;
 
     } else {
-        // --- 条件 B：算法没看到钢板 ---
+        // --- 条件 B：算法没看到边缘 ---
 
         if (m_isPlatePresent) {
-            // 【当前状态是有钢板的，但这一帧瞎了（可能是有干扰，或者是板尾正在离开）】
+            // 【当前状态是有物体的，但这一帧瞎了（正在出尾或有局部干扰）】
             m_emptyFrameCount++;
 
-            // 💡【核心动作：补尾】只要还没达到结束阈值，就把这帧空背景也拼进去当板尾！
+            // 只要没达到结束阈值，就把这帧空图也拼进去当板尾
             if (res.dispImage.IsInitialized() && m_emptyFrameCount <= EMPTY_FRAME_LIMIT) {
+                HTuple w, h;
+                HalconCpp::GetImageSize(res.dispImage, &w, &h);
+                m_totalRows += h[0].I(); // 补尾的图也算入总长度
                 addFrameToFusion(res.dispImage);
             }
 
-            // 如果连续多帧没看到板子，说明板尾彻底走完了
+            // 【下降沿：物体彻底走完，开始结算！】
             if (m_emptyFrameCount >= EMPTY_FRAME_LIMIT) {
                 m_isPlatePresent = false; // 状态彻底复位
 
-                // ... 此处保留你原有的：计算最大最小值、平均值，并存入本地前 5 条历史记录的代码 ...
-                // int pointCount = m_vecWidthValue.size();
-                // if (pointCount > 0) {
-                //     ...
-                // }
+                // 1. 【尾部画面冻结】显示记录的最后一帧清晰画面
+                if (m_hLastValidImage.IsInitialized()) {
+                    try {
+                        HTuple w, h;
+                        HalconCpp::GetImageSize(m_hLastValidImage, &w, &h);
+                        HalconCpp::SetPart(winHandle_back, 0, 0, h - 1, w - 1);
+                        HalconCpp::DispObj(m_hLastValidImage, winHandle_back);
+                    } catch (...) { }
+                }
+
+                // 2. 出尾时计算汇总数据
+                if (m_validFrameCount > 0) {
+                    double avgWidth = m_sumWidth / m_validFrameCount;
+
+                    // ⚠️ 这里是编码器分辨率(毫米/行)，请根据实际标定修改！
+                    double y_resolution = 1.0;
+                    double totalLength = m_totalRows * y_resolution;
+
+                    // =========================================================
+                    // 💡 核心功能：基于长宽比和绝对长度的物理异常过滤
+                    // =========================================================
+                    double MIN_VALID_LENGTH = 1000.0; // 假定短于 1000mm 的绝对是垃圾
+
+                    if (totalLength < MIN_VALID_LENGTH || totalLength < avgWidth) {
+                        // 判定为干扰物（横着的水滴、标定板、短杂物等）
+                        qDebug() << "[异常过滤] 判定为非钢板干扰物！已自动丢弃。"
+                                 << "测得长度:" << totalLength << "mm, 平均宽度:" << avgWidth << "mm";
+
+                        // 强制清空刚才画出的假曲线和全景拼接图，当作无事发生
+                        clearCurveChart();
+                        resetFusion();
+
+                    } else {
+                        // =========================================================
+                        // 判定为真正的钢板，正常更新数据面板和存入历史
+                        // =========================================================
+                        ui->lineEdit_4->setText(QString::number(totalLength, 'f', 2)); // 长度
+                        ui->lineEdit_3->setText(QString::number(avgWidth, 'f', 2));    // 平均宽度
+                        ui->lineEdit_8->setText(QString::number(m_maxWidth, 'f', 2));  // 最大宽度
+                        ui->lineEdit_9->setText(QString::number(m_minWidth, 'f', 2));  // 最小宽度
+
+                        // 自动存入下方历史记录并保存到本地
+                        QString plateID = QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss");
+                        addHistoryRecord(plateID, totalLength, 0.0, 0.0, avgWidth, m_maxWidth, m_minWidth);
+                    }
+                }
             }
 
         } else {
-            // 【当前视野里完全是空的，正在等待下一张新钢板】
-            // 💡【核心动作：蓄力板头】虽然是空画面，但它可能是下一张钢板的头！存起来！
+            // 【当前视野里完全是空的，等待下一个物体】
+            // 蓄力板头：存下背景图备用
             if (res.dispImage.IsInitialized()) {
                 m_preBufferList.append(res.dispImage);
-
-                // 维持队列长度，踢出最老的图，永远只保留最近的 HEAD_FRAME_COUNT 张
                 while (m_preBufferList.size() > HEAD_FRAME_COUNT) {
                     m_preBufferList.removeFirst();
                 }
@@ -341,6 +891,9 @@ void frmView1::onMeasureReady(const WidthResult &res)
         }
     }
 
+    // =========================================================
+    // 3. 渲染 Halcon 画线坐标 (基于全尺寸拼接图)
+    // =========================================================
     if (res.dispImage.IsInitialized()) {
         try {
             HTuple currentWin = this->winHandle_cam1_pro;
@@ -352,16 +905,18 @@ void frmView1::onMeasureReady(const WidthResult &res)
             if (res.isValid && res.renderLeftX != -1) {
                 HalconCpp::SetLineWidth(currentWin, 2);
 
+                // 画边线
                 HalconCpp::SetColor(currentWin, "green");
                 HalconCpp::DispLine(currentWin, 0, res.renderLeftX, imgH - 1, res.renderLeftX);
-
                 HalconCpp::SetColor(currentWin, "cyan");
                 HalconCpp::DispLine(currentWin, 0, res.renderRightX, imgH - 1, res.renderRightX);
 
+                // 画十字测量点
                 HalconCpp::SetColor(currentWin, "red");
                 HalconCpp::DispCross(currentWin, res.renderY, res.renderLeftX, 60, 0);
                 HalconCpp::DispCross(currentWin, res.renderY, res.renderRightX, 60, 0);
 
+                // 叠加文字
                 QString widthStr = QString("Physical Width: %1 mm").arg(res.widthValue, 0, 'f', 3);
                 HalconCpp::DispText(currentWin, widthStr.toLocal8Bit().constData(),
                                     "window", 20, 20, "red", HTuple(), HTuple());
@@ -379,7 +934,6 @@ void frmView1::onMeasureReady(const WidthResult &res)
         }
     }
 }
-
 void frmView1::resetFusion() {
     m_hFusedImage.Clear(); // 清空旧图对象
     m_isFirstFrame = true;
@@ -523,4 +1077,57 @@ void frmView1::updateHistoryTable()
 
         m_tableModelHistory->appendRow(rowItems);
     }
+}
+void frmView1::initCurveChart()
+{
+    m_currentFrameCount = 0;
+
+    // 1. 基本背景颜色设置 (深灰黑色背景)
+    ui->customPlot_width->setBackground(QBrush(QColor(30, 30, 30)));
+    ui->customPlot_width->axisRect()->setBackground(QBrush(QColor(20, 20, 20)));
+
+    ui->customPlot_width->addGraph();
+
+    // =======================================================
+    // 💡 视觉柔和优化区
+    // =======================================================
+    // 1. 设置画笔：加入圆滑的拐角(RoundJoin)和线帽(RoundCap)
+    QPen graphPen;
+    graphPen.setColor(QColor(0, 255, 0));
+    graphPen.setWidth(2);
+    graphPen.setJoinStyle(Qt::RoundJoin);
+    graphPen.setCapStyle(Qt::RoundCap);
+    ui->customPlot_width->graph(0)->setPen(graphPen);
+
+    // 2. 填充曲线下方区域：用半透明的荧光绿填充，能极大地削弱折线的干瘪和突兀感！
+    ui->customPlot_width->graph(0)->setBrush(QBrush(QColor(0, 255, 0, 40))); // 40代表透明度，可微调
+
+    // 3. 取消散点：点太多会让折线看起来像毛毛虫，直接不显示点，只留一条线会更顺滑
+    ui->customPlot_width->graph(0)->setScatterStyle(QCPScatterStyle::ssNone);
+
+    // 4. 强制开启抗锯齿（使线条边缘更平滑）
+    ui->customPlot_width->setNotAntialiasedElements(QCP::aeNone);
+    // =======================================================
+
+    // X 轴和 Y 轴的标签和颜色
+    ui->customPlot_width->xAxis->setLabelColor(Qt::white);
+    ui->customPlot_width->xAxis->setTickLabelColor(Qt::white);
+    ui->customPlot_width->xAxis->setBasePen(QPen(Qt::white));
+    ui->customPlot_width->xAxis->setTickPen(QPen(Qt::white));
+    ui->customPlot_width->xAxis->setSubTickPen(QPen(Qt::white));
+    ui->customPlot_width->xAxis->setLabel("图像帧数 (Frame)");
+
+    ui->customPlot_width->yAxis->setLabelColor(Qt::white);
+    ui->customPlot_width->yAxis->setTickLabelColor(Qt::white);
+    ui->customPlot_width->yAxis->setBasePen(QPen(Qt::white));
+    ui->customPlot_width->yAxis->setTickPen(QPen(Qt::white));
+    ui->customPlot_width->yAxis->setSubTickPen(QPen(Qt::white));
+    ui->customPlot_width->yAxis->setLabel("宽度尺寸 (mm)");
+
+    // 设置默认的坐标轴范围
+    ui->customPlot_width->xAxis->setRange(0, 15);
+    ui->customPlot_width->yAxis->setRange(1000, 2500);
+
+    // 允许用户用鼠标拖拽和缩放图表
+    ui->customPlot_width->setInteractions(QCP::iRangeDrag | QCP::iRangeZoom);
 }

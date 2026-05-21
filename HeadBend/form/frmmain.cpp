@@ -466,7 +466,7 @@ void frmMain::initText()
     NodeData *pNodeData=pApp->pNodeData;
 
     //从配置文件读取logo名称
-    ui->labLogoCn->setText(u8"板号识别系统");
+    ui->labLogoCn->setText(u8"三维测量系统");
     ui->labLogoEn->setText("OCR System for Plate");
 
     this->setWindowTitle(pNodeData->setting.local_window_name);

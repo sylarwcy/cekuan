@@ -38,4 +38,24 @@ signals:
 private:
     DualLineScanWidthImgPro *m_algo;
     bool m_isProcessing{false};
+
+
+private:
+    bool m_isPlateActive = false;
+    double m_sumWidth = 0.0;
+    int m_validFrameCount = 0;
+    int m_totalRows = 0;
+    double m_mm_per_row = 1.0;
+
+    // --- 新增：用于记录最大和最小宽度 ---
+    double m_maxWidth = 0.0;
+    double m_minWidth = 99999.0; // 初始给一个极大的值，方便找最小值
+
+signals:
+    // 已有的单帧实时数据信号
+    // void sigMeasureReady(WidthResult res);
+
+    // --- 新增：整块钢板走完后，发送汇总数据的信号 ---
+    // 按顺序：平均宽度，总长度，最大宽度，最小宽度
+    void sigPlateFinished(double avgWidth, double totalLength, double maxWidth, double minWidth);
 };

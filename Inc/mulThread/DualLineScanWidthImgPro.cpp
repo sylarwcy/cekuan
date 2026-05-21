@@ -76,11 +76,11 @@ WidthResult DualLineScanWidthImgPro::processFrame(const HalconCpp::HObject& imgL
             HalconCpp::HTuple HM, HS, RowM, ColM, AmpM, DistM, RowS, ColS, AmpS, DistS;
 
             HalconCpp::GenMeasureRectangle2(cy[i], cx_m, 0, half_w_m, measureHeight_Half, wM, hM, "nearest_neighbor", &HM);
-            HalconCpp::MeasurePos(imgLeft, HM, 2.0, 15, "negative", "first", &RowM, &ColM, &AmpM, &DistM);
+            HalconCpp::MeasurePos(imgLeft, HM, 2.0, 30, "negative", "first", &RowM, &ColM, &AmpM, &DistM);
             HalconCpp::CloseMeasure(HM);
 
             HalconCpp::GenMeasureRectangle2(cy[i], cx_s, 0, half_w_s, measureHeight_Half, wS, hM, "nearest_neighbor", &HS);
-            HalconCpp::MeasurePos(imgRight, HS, 2.0, 15, "positive", "first", &RowS, &ColS, &AmpS, &DistS);
+            HalconCpp::MeasurePos(imgRight, HS, 2.0, 30, "positive", "first", &RowS, &ColS, &AmpS, &DistS);
             HalconCpp::CloseMeasure(HS);
 
             if (ColM.Length() > 0 && ColS.Length() > 0) {

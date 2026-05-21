@@ -117,7 +117,20 @@ private slots:
 
     void addCurvePoint(double widthValue); // 槽：增加一个点并刷新图表
     void clearCurveChart();                // 槽：新钢板到来时清空图表
+private:
+    // ... 原本的变量 ...
 
+    // --- 新增：测宽数据统计专用变量 ---
+    double m_sumWidth = 0.0;      // 累加总宽度
+    int m_validFrameCount = 0;    // 有效检测帧数
+    int m_totalRows = 0;          // 总行数(用于算长度)
+    double m_maxWidth = 0.0;      // 最大宽度
+    double m_minWidth = 99999.0;  // 最小宽度
+private:
+    // ... 原有变量 ...
+    HalconCpp::HTuple winHandle_front; // 头部显示窗口
+    HalconCpp::HTuple winHandle_back;  // 尾部显示窗口
+    HalconCpp::HObject m_hLastValidImage; // 临时记录最后一帧有效图，用于出尾显示
 };
 
 #endif // FRMVIEW1_H
