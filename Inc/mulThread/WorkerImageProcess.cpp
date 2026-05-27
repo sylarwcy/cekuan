@@ -1,6 +1,9 @@
 ﻿#include "WorkerImageProcess.h"
 #include "appconfig.h"
 #include "HalconCpp.h"
+#include <QDir>
+#include <QDateTime>
+
 HalconCpp::HTuple winHandle_pro;
 WorkerImageProcess::WorkerImageProcess(QObject *parent) : QObject(parent), m_algo(nullptr) {
     qRegisterMetaType<WidthResult>("WidthResult");
@@ -67,6 +70,27 @@ void WorkerImageProcess::imgProcessMeasure(const DualCameraChunk &chunk) {
             HalconCpp::GetImageSize(chunk.imgLeft, &w, &h);
             m_totalRows += h[0].I();
 
+            // 保存有钢板的、左右合并后的拼接原图
+            if (res.dispImage.IsInitialized()) {
+                try {
+                    // 每天自动建一个文件夹，避免图片全堆在一起
+                    QString dateStr = QDateTime::currentDateTime().toString("yyyy-MM-dd");
+                    QString dirPath = QString("./SaveImages/%1").arg(dateStr);
+                    QDir dir;
+                    if (!dir.exists(dirPath)) {
+                        dir.mkpath(dirPath);
+                    }
+
+                    // 命名规则: Plate_时分秒_毫秒_帧号.jpg
+                    QString timeStr = QDateTime::currentDateTime().toString("HHmmss_zzz");
+                    QString fileName = QString("%1/Plate_%2_F%3.jpg").arg(dirPath).arg(timeStr).arg(res.frameID);
+
+                    // 保存图片 (这里使用 jpeg 格式节省空间，0 代表默认质量。如果想存无损可改 "tiff")
+                    HalconCpp::WriteImage(res.dispImage, "jpeg", 0, fileName.toLocal8Bit().constData());
+                } catch (HalconCpp::HException &e) {
+                    qWarning() << "[存图失败]:" << e.ErrorMessage().Text();
+                }
+            }
         } else {
             // --- 状态 B：没有检测到有效边缘 ---
             if (m_isPlateActive) {

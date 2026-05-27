@@ -39,7 +39,7 @@ qt5_add_resources(QRC_SOURCES
 )
 
 file(GLOB SRC_FILES CONFIGURE_DEPENDS
-        ${CMAKE_SOURCE_DIR}/../inc/opencv/include/opencv2/opencv.hpp
+#        ${CMAKE_SOURCE_DIR}/../inc/opencv/include/opencv2/opencv.hpp
         ${CMAKE_SOURCE_DIR}/main/*.h ${CMAKE_SOURCE_DIR}/main/*.cpp  # main
         ${CMAKE_SOURCE_DIR}/app/*.h ${CMAKE_SOURCE_DIR}/app/*.cpp# app
         ${CMAKE_SOURCE_DIR}/form/*.h ${CMAKE_SOURCE_DIR}/form/*.cpp ${CMAKE_SOURCE_DIR}/form/*.ui  # form

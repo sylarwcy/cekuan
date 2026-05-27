@@ -28,7 +28,7 @@ inline QDataStream &operator<<(QDataStream &out, const PlateRecord &record) {
 
 inline QDataStream &operator>>(QDataStream &in, PlateRecord &record) {
     in >> record.plateID >> record.length >> record.thickness
-       >> record.targetWidth >> record.avgWidth >> record.maxWidth >> record.minWidth; // 全部改为 >>
+       >> record.targetWidth >> record.avgWidth >> record.maxWidth >> record.minWidth;
     return in;
 }
 
@@ -48,6 +48,7 @@ public:
     HTuple winHandle_cam1_pro;
     HTuple winHandle_cam2_ori;
     HTuple winHandle_fusion;
+    HTuple winHandle_lunkuo;
 
     MyCameraGigE *p_camera_front;
     MyCameraGigE *p_camera_back;
@@ -89,7 +90,6 @@ private:
     // --- 全景拼接相关 ---
     HalconCpp::HObject m_hFusedImage;
     bool m_isFirstFrame;
-    bool m_headDisplayed{false}; // 💡 新增：标记头部是否已实时渲染过
 
     void initFusionView();
     void resetFusion();
@@ -111,17 +111,29 @@ private slots:
     void onUpdateRawImage(const DualCameraChunk &chunk);
     void addCurvePoints(const QVector<double> &widths);
     void clearCurveChart();
+    void onMultiplierChanged(int value);
 
 private:
+    void updatePostProcessCurve(int multiplier);
+
     double m_sumWidth = 0.0;
     int m_validFrameCount = 0;
     int m_totalRows = 0;
     double m_maxWidth = 0.0;
     double m_minWidth = 99999.0;
 
-    HalconCpp::HTuple winHandle_front;
-    HalconCpp::HTuple winHandle_back;
-    HalconCpp::HObject m_hLastValidImage;
+    QVector<double> m_globalContourRows;
+    QVector<double> m_globalContourColsL;
+    QVector<double> m_globalContourColsR;
+
+    // 物理宽度缓存
+    QVector<double> m_globalPhysicalWidths;
+
+    int m_currentGlobalY{0};
+
+    // 缓存绘制图表用的实时值与纠偏值
+    QVector<double> m_realtimeWidths;
+    QVector<double> m_correctedGlobalWidths;
 };
 
 #endif // FRMVIEW1_H

@@ -84,22 +84,24 @@ struct WidthResult {
     double widthValue;
     double yawAngle;
 
-    // UI 画十字线专用的中位数坐标 (代表平均宽度)
     int renderLeftX;
     int renderRightX;
     int renderY;
-
-    // 💡【新增】：当前帧最宽处绝对极限包络坐标 (专供切边使用，防圆弧截断)
     int renderBoundLeftX;
     int renderBoundRightX;
 
     QVector<double> rowWidths;
+
+    // 💡 新增：用于将单帧的微观轮廓坐标传给监视窗口渲染
+    QVector<double> contourRows;
+    QVector<double> contourColsLeft;
+    QVector<double> contourColsRight;
+
     HalconCpp::HObject dispImage;
 
-    // 💡【更新】：记得在构造函数里把新增的变量也初始化一下 (-1 代表无效)
     WidthResult() : frameID(0), isValid(false), widthValue(0.0), yawAngle(0.0),
                     renderLeftX(-1), renderRightX(-1), renderY(-1),
-                    renderBoundLeftX(-1), renderBoundRightX(-1), rowWidths() {
+                    renderBoundLeftX(-1), renderBoundRightX(-1) {
         HalconCpp::GenEmptyObj(&dispImage);
     }
 };

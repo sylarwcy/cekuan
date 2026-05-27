@@ -148,12 +148,14 @@ WidthResult DualLineScanWidthImgPro::processFrame(const HalconCpp::HObject& imgL
                                     mOne, mOne, mOne, mOne, mWidth + sWidth, frameHeight);
 
         // =========================================================
-        // 4. 🚀 钢板形态学智能预检 (Convexity凸度 + Length横向跨度)
+        // 4. 🚀 钢板形态学粗定位 (获取钢板大黑块的包络框)
         // =========================================================
         bool isPlateValid = false;
+        HalconCpp::HTuple Row1, Column1, Row2, Column2; // 提取到外层，供后续使用
+
         try {
             HalconCpp::HObject Region, ConnectedRegions, SelectedRegions, RegionFillUp;
-            HalconCpp::HTuple UsedThreshold, Convexity, NumRegions, Row1, Column1, Row2, Column2;
+            HalconCpp::HTuple UsedThreshold, Convexity, NumRegions;
 
             HalconCpp::BinaryThreshold(result.dispImage, &Region, "max_separability", "dark", &UsedThreshold);
             HalconCpp::Connection(Region, &ConnectedRegions);
@@ -165,7 +167,10 @@ WidthResult DualLineScanWidthImgPro::processFrame(const HalconCpp::HObject& imgL
                 HalconCpp::CountObj(SelectedRegions, &NumSelected);
                 if (NumSelected.I() > 0) {
                     HalconCpp::FillUp(SelectedRegions, &RegionFillUp);
+
+                    // 💡 获取这块“黑坨坨”的全局外接矩形边界
                     HalconCpp::SmallestRectangle1(RegionFillUp, &Row1, &Column1, &Row2, &Column2);
+
                     double lengthPx = Column2[0].D() - Column1[0].D();
                     HalconCpp::Convexity(RegionFillUp, &Convexity);
 
@@ -177,7 +182,7 @@ WidthResult DualLineScanWidthImgPro::processFrame(const HalconCpp::HObject& imgL
         } catch (...) { isPlateValid = false; }
 
         // =========================================================
-        // 5. 3D 轮廓级逐行找边提取 (仅在检测到有效钢板时触发)
+        // 5. 🚀 3D 轮廓级逐行精细找边提取 (动态窄域 ROI)
         // =========================================================
         double u_master_best = -1.0;
         double u_slave_best = -1.0;
@@ -185,11 +190,23 @@ WidthResult DualLineScanWidthImgPro::processFrame(const HalconCpp::HObject& imgL
         double u_slave_max = -1.0;
 
         if (isPlateValid) {
-            double master_startX = 700.0;
-            double cx_m = master_startX + (wM - master_startX) / 2.0;
-            double half_w_m = (wM - master_startX) / 2.0;
-            double cx_s = 3200.0 / 2.0;
-            double half_w_s = 3200.0 / 2.0;
+            // 💡 核心新增：先通过第 4 步的粗定位包络框，换算出原始相机的粗略边界
+            double rough_left_stitched = Column1[0].D();
+            double rough_right_stitched = Column2[0].D();
+
+            double cx_m = rough_left_stitched + mStartX;
+            double cx_s = (rough_right_stitched - mWidth) + sStartX;
+
+            // 💡 将 ROI 搜索半宽从以前的上千像素，极速缩减到仅 ±200 像素
+            // 物理上这已经能覆盖几十毫米的边缘波动和倾斜，且完美屏蔽了背景传送带
+            double half_w_m = 200.0;
+            double half_w_s = 200.0;
+
+            // 越界安全保护，防止 ROI 矩形画出图像外面报错
+            if (cx_m - half_w_m < 0) cx_m = half_w_m;
+            if (cx_m + half_w_m > wM - 1) cx_m = wM - 1 - half_w_m;
+            if (cx_s - half_w_s < 0) cx_s = half_w_s;
+            if (cx_s + half_w_s > wS - 1) cx_s = wS - 1 - half_w_s;
 
             QVector<double> vecWidths;
             QVector<double> vecMasterU;
@@ -198,10 +215,12 @@ WidthResult DualLineScanWidthImgPro::processFrame(const HalconCpp::HObject& imgL
             for (int y = 0; y < frameHeight; y++) {
                 HalconCpp::HTuple HM, HS, RowM, ColM, AmpM, DistM, RowS, ColS, AmpS, DistS;
 
+                // 左相机 ROI：只在左边缘附近小范围找
                 HalconCpp::GenMeasureRectangle2(y, cx_m, 0, half_w_m, 1.0, wM, frameHeight, "nearest_neighbor", &HM);
                 HalconCpp::MeasurePos(imgLeftAligned, HM, 2.0, 30, "negative", "first", &RowM, &ColM, &AmpM, &DistM);
                 HalconCpp::CloseMeasure(HM);
 
+                // 右相机 ROI：只在右边缘附近小范围找
                 HalconCpp::GenMeasureRectangle2(y, cx_s, 0, half_w_s, 1.0, wS, frameHeight, "nearest_neighbor", &HS);
                 HalconCpp::MeasurePos(imgRightAligned, HS, 2.0, 30, "positive", "first", &RowS, &ColS, &AmpS, &DistS);
                 HalconCpp::CloseMeasure(HS);
@@ -215,14 +234,17 @@ WidthResult DualLineScanWidthImgPro::processFrame(const HalconCpp::HObject& imgL
                     vecWidths.append(XR - XL);
                     vecMasterU.append(um);
                     vecSlaveU.append(us);
+
+                    result.contourRows.append(y);
+                    result.contourColsLeft.append(um - mStartX);
+                    result.contourColsRight.append(mWidth + us - sStartX);
                 }
             }
 
-            // 中值滤波清洗出最终数据
             if (vecWidths.size() > 20) {
                 result.isValid = true;
                 result.yawAngle = 0.0;
-                result.rowWidths = vecWidths; // 打包高密度行点云给 UI
+                result.rowWidths = vecWidths;
 
                 QVector<double> sortedWidths = vecWidths;
                 std::sort(sortedWidths.begin(), sortedWidths.end());
@@ -236,7 +258,6 @@ WidthResult DualLineScanWidthImgPro::processFrame(const HalconCpp::HObject& imgL
                 u_master_best = sortedMasterU[sortedMasterU.size() / 2];
                 u_slave_best = sortedSlaveU[sortedSlaveU.size() / 2];
 
-                // 提取单帧内绝对最宽的包络边缘点（防圆弧被切断）
                 u_master_min = sortedMasterU.first();
                 u_slave_max = sortedSlaveU.last();
             }
