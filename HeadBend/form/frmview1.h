@@ -5,6 +5,10 @@
 #include <QLineEdit>
 #include "qcustomplot.h"
 #include "MyApplication.h"
+#include <QSqlDatabase>
+#include <QSqlQuery>
+#include <QSqlError>
+#include <QDebug>
 
 namespace Ui {
     class frmView1;
@@ -70,6 +74,10 @@ public:
     void initForm();
 
 private:
+    void initDatabase();
+    void saveRecordToDb(const PlateRecord& record);
+    void loadHistoryFromDb();   // 从数据库加载最近5条记录
+
     void adjustFontSize(QLineEdit* lineEdit, int h, int fontSize);
 
     // --- 曲线图相关缓存数据 ---
@@ -100,8 +108,6 @@ private:
     QStandardItemModel *m_tableModelHistory;
 
     void initHistoryUI();
-    void loadHistoryFromFile();
-    void saveHistoryToFile();
     void updateHistoryTable();
 
     void addHistoryRecord(const QString& plateID, double length, double thickness,

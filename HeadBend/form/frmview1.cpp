@@ -11,14 +11,88 @@
 frmView1::frmView1(QWidget *parent) : QWidget(parent), ui(new Ui::frmView1) {
     ui->setupUi(this);
     initForm();
-    loadHistoryFromFile();
+    initDatabase();            // 先初始化数据库（创建表等）
+    loadHistoryFromDb();       // 然后加载最近5条记录
     QTimer::singleShot(1000, this, SLOT(varInit()));
+
 }
 
 frmView1::~frmView1() {
     delete ui;
     if (p_camera_front) { p_camera_front->StopGrabbing(); p_camera_front->CloseCamera(); delete p_camera_front; }
     if (p_camera_back) { p_camera_back->StopGrabbing(); p_camera_back->CloseCamera(); delete p_camera_back; }
+}
+
+void frmView1::loadHistoryFromDb()
+{
+    // 确保数据库连接可用
+    if (!QSqlDatabase::database().isOpen()) {
+        qDebug() << "数据库未打开，无法加载历史记录";
+        return;
+    }
+
+    QSqlQuery query;
+    // 按 id 倒序（或按 measureTime 倒序），取最近5条
+    query.prepare("SELECT plateID, length, thickness, targetWidth, avgWidth, maxWidth, minWidth "
+                  "FROM PlateRecord ORDER BY id DESC LIMIT 5");
+    if (!query.exec()) {
+        qDebug() << "查询历史记录失败:" << query.lastError().text();
+        return;
+    }
+
+    m_historyList.clear();
+    while (query.next()) {
+        PlateRecord rec;
+        rec.plateID     = query.value(0).toString();
+        rec.length      = query.value(1).toDouble();
+        rec.thickness   = query.value(2).toDouble();
+        rec.targetWidth = query.value(3).toDouble();
+        rec.avgWidth    = query.value(4).toDouble();
+        rec.maxWidth    = query.value(5).toDouble();
+        rec.minWidth    = query.value(6).toDouble();
+        m_historyList.append(rec);
+    }
+
+    // 因为查询是按 id 倒序，即最新的在前，但表格显示通常希望最新的在上，
+    // 而 m_historyList 中顺序即为查询顺序，直接刷新表格即可。
+    updateHistoryTable();
+}
+
+void frmView1::initDatabase() {
+    QSqlDatabase db;
+    // 防止重复添加默认连接导致 Qt 报警告
+    if (QSqlDatabase::contains("qt_sql_default_connection")) {
+        db = QSqlDatabase::database("qt_sql_default_connection");
+    } else {
+        db = QSqlDatabase::addDatabase("QSQLITE");
+        // 把数据库文件放在执行程序同级目录下，用来替代原来的 bin/history_data.dat
+        db.setDatabaseName(QCoreApplication::applicationDirPath() + "/history_data.db");
+    }
+
+    if (!db.open()) {
+        qDebug() << "无法打开 SQLite 数据库:" << db.lastError().text();
+        return;
+    }
+
+    QSqlQuery query;
+    // 创建包含所有宽度、厚度、长度字段的表，外加自增的ID和记录生成时间
+    QString createTableSql = R"(
+        CREATE TABLE IF NOT EXISTS PlateRecord (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            plateID TEXT,
+            length REAL,
+            thickness REAL,
+            targetWidth REAL,
+            avgWidth REAL,
+            maxWidth REAL,
+            minWidth REAL,
+            measureTime DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    )";
+
+    if (!query.exec(createTableSql)) {
+        qDebug() << "历史表 PlateRecord 创建失败:" << query.lastError().text();
+    }
 }
 
 void frmView1::resizeEvent(QResizeEvent *event) {
@@ -139,13 +213,13 @@ void frmView1::initCurveChart() {
     ui->customPlot_width->setBackground(QBrush(QColor(30, 30, 30)));
     ui->customPlot_width->axisRect()->setBackground(QBrush(QColor(20, 20, 20)));
 
-    // 💡 图层 0：绿色实时线 (底层，设为 1.5 粗细，不抢风头)
+    // 图层 0：绿色实时线
     ui->customPlot_width->addGraph();
     QPen greenPen; greenPen.setColor(QColor(0, 255, 0)); greenPen.setWidth(1.5);
     ui->customPlot_width->graph(0)->setPen(greenPen);
     ui->customPlot_width->graph(0)->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssDisc, QColor(0, 255, 0), 4));
 
-    // 💡 图层 1：白色高精度线 (顶层，设为 2 粗细，突出但不过粗)
+    // 图层 1：白色高精度线
     ui->customPlot_width->addGraph();
     QPen whitePen; whitePen.setColor(Qt::white); whitePen.setWidth(2);
     ui->customPlot_width->graph(1)->setPen(whitePen);
@@ -297,22 +371,16 @@ void frmView1::updatePostProcessCurve(int multiplier) {
         }
     }
 
-    QVector<double> greenX, greenY;
-    for (int i = 0; i < frames; ++i) {
-        greenX.append((i + 1) * multiplier);
-        greenY.append(m_realtimeWidths[i]);
-    }
-
-    // 💡 保证白线图层在最上方绘制
-    ui->customPlot_width->graph(0)->setData(greenX, greenY);
+    // 💡 核心修改：钢板走完结算后，清空图层 0 (绿线)，只显示图层 1 (白线)
+    ui->customPlot_width->graph(0)->data()->clear();
     ui->customPlot_width->graph(1)->setData(whiteX, whiteY);
 
     ui->customPlot_width->xAxis->setRange(0, totalSegments + 1);
 
-    QVector<double> allY = greenY + whiteY;
-    if (!allY.isEmpty()) {
-        double minY = *std::min_element(allY.begin(), allY.end());
-        double maxY = *std::max_element(allY.begin(), allY.end());
+    // 💡 现在只根据白线来动态调整 Y 轴最佳视野
+    if (!whiteY.isEmpty()) {
+        double minY = *std::min_element(whiteY.begin(), whiteY.end());
+        double maxY = *std::max_element(whiteY.begin(), whiteY.end());
         double pad = (maxY - minY) * 0.5;
         if (pad < 5) pad = 5;
         ui->customPlot_width->yAxis->setRange(minY - pad, maxY + pad);
@@ -439,7 +507,6 @@ void frmView1::onMeasureReady(const WidthResult &res)
 
                 int validCount = 0;
                 for (int i = 0; i < n; ++i) {
-                    // 💡 直接使用底层换算好的物理宽度
                     double w_horizontal = m_globalPhysicalWidths[i];
                     double w_true = w_horizontal * cosTheta;
                     m_correctedGlobalWidths.append(w_true);
@@ -460,10 +527,6 @@ void frmView1::onMeasureReady(const WidthResult &res)
                 trueMin = m_minWidth;
             }
 
-            // =======================================================================
-            // 🚀 核心修复：放宽防呆条件！物理长度 (行数 * 0.09473) 只要 > 50 毫米就计算
-            // 之前由于条件限制成了 >= 1000 且 长度必须大于宽度，导致你的短测试板被过滤！
-            // =======================================================================
             double totalLength = m_totalRows * 0.09473;
 
             if (totalLength >= 50.0) {
@@ -478,6 +541,8 @@ void frmView1::onMeasureReady(const WidthResult &res)
                 int multiplier = 3;
                 QSpinBox* spin = this->findChild<QSpinBox*>("spinSegment");
                 if (spin) multiplier = spin->value();
+
+                // 💡 此时调用渲染函数，它会直接清空绿线并单独绘制白线
                 updatePostProcessCurve(multiplier);
 
                 if (m_hFusedImage.IsInitialized() && globalMinLeft != 99999 && globalMaxRight != -1) {
@@ -558,11 +623,10 @@ void frmView1::onMeasureReady(const WidthResult &res)
             m_maxWidth = 0.0;
             m_minWidth = 99999.0;
 
-            // 💡 核心新增：新钢板到达时，瞬间将下方统计面板的四个数值清零
-            ui->lineEdit_4->setText("0.00"); // 长度清零
-            ui->lineEdit_3->setText("0.00"); // 平均宽度清零
-            ui->lineEdit_8->setText("0.00"); // 最大宽度清零
-            ui->lineEdit_9->setText("0.00"); // 最小宽度清零
+            ui->lineEdit_4->setText("0.00");
+            ui->lineEdit_3->setText("0.00");
+            ui->lineEdit_8->setText("0.00");
+            ui->lineEdit_9->setText("0.00");
 
             m_globalContourRows.clear();
             m_globalContourColsL.clear();
@@ -596,7 +660,6 @@ void frmView1::onMeasureReady(const WidthResult &res)
             m_globalContourColsL.append(res.contourColsLeft[i]);
             m_globalContourColsR.append(res.contourColsRight[i]);
 
-            // 💡 严密存入真实宽度
             if (i < res.rowWidths.size()) {
                 m_globalPhysicalWidths.append(res.rowWidths[i]);
             } else {
@@ -617,7 +680,7 @@ void frmView1::onMeasureReady(const WidthResult &res)
 
         QVector<double> frameWidth;
         frameWidth.append(res.widthValue);
-        addCurvePoints(frameWidth);
+        addCurvePoints(frameWidth); // 💡 这里会在经过时一直绘制绿线
         m_emptyFrameCount = 0;
 
     } else {
@@ -690,50 +753,53 @@ void frmView1::initHistoryUI() {
     verticalFont.setPointSize(14); ui->tableView_history->verticalHeader()->setFont(verticalFont);
 }
 
-void frmView1::saveHistoryToFile() {
-    QString folderPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-    QDir dir(folderPath);
-    if (!dir.exists()) {
-        dir.mkpath(".");
+
+
+void frmView1::addHistoryRecord(const QString& plateID, double length, double thickness, double targetW, double avgW, double maxW, double minW) {
+    // 1. 封装数据到结构体
+    PlateRecord newRecord{plateID, length, thickness, targetW, avgW, maxW, minW};
+
+    // 2. 更新内存列表，保留给表格显示（例如只显示最新 5 条）
+    m_historyList.prepend(newRecord);
+    while (m_historyList.size() > 5) {
+        m_historyList.removeLast();
     }
 
-    QString filePath = folderPath + "/history_data.dat";
-    QFile file(filePath);
+    // 3. 将新记录存入 SQLite 数据库
+    saveRecordToDb(newRecord);
 
-    if (!file.open(QIODevice::WriteOnly)) {
-        qCritical() << "错误: 无法保存历史数据到" << filePath << " 原因:" << file.errorString();
-        return;
-    }
-
-    QDataStream out(&file);
-    out.setVersion(QDataStream::Qt_5_0);
-    out << m_historyList;
-    file.close();
-    qDebug() << "历史数据已成功保存至:" << filePath;
-}
-
-void frmView1::loadHistoryFromFile() {
-    QString folderPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-    QString filePath = folderPath + "/history_data.dat";
-    QFile file(filePath);
-
-    if (file.exists() && file.open(QIODevice::ReadOnly)) {
-        QDataStream in(&file);
-        in.setVersion(QDataStream::Qt_5_0);
-        in >> m_historyList;
-        file.close();
-        qDebug() << "历史数据已成功加载:" << filePath;
-    } else {
-        qDebug() << "未找到历史数据文件，将创建新文件:" << filePath;
-    }
+    // 4. 更新界面表格
     updateHistoryTable();
 }
 
-void frmView1::addHistoryRecord(const QString& plateID, double length, double thickness, double targetW, double avgW, double maxW, double minW) {
-    PlateRecord newRecord{plateID, length, thickness, targetW, avgW, maxW, minW};
-    m_historyList.prepend(newRecord);
-    while (m_historyList.size() > 5) m_historyList.removeLast();
-    saveHistoryToFile(); updateHistoryTable();
+void frmView1::saveRecordToDb(const PlateRecord& record) {
+    // 检查默认数据库连接是否已经正常打开
+    if (!QSqlDatabase::database().isOpen()) {
+        qDebug() << "数据库未打开，无法写入历史记录";
+        return;
+    }
+
+    QSqlQuery query;
+    // 准备插入语句，涵盖 PlateRecord 的所有 7 个字段
+    query.prepare("INSERT INTO PlateRecord "
+                  "(plateID, length, thickness, targetWidth, avgWidth, maxWidth, minWidth) "
+                  "VALUES (:plateID, :length, :thickness, :targetWidth, :avgWidth, :maxWidth, :minWidth)");
+
+    // 绑定具体的测量参数
+    query.bindValue(":plateID", record.plateID);
+    query.bindValue(":length", record.length);
+    query.bindValue(":thickness", record.thickness);
+    query.bindValue(":targetWidth", record.targetWidth);
+    query.bindValue(":avgWidth", record.avgWidth);
+    query.bindValue(":maxWidth", record.maxWidth);
+    query.bindValue(":minWidth", record.minWidth);
+
+    // 执行 SQL 并检查是否成功
+    if (!query.exec()) {
+        qDebug() << "写入历史记录失败:" << query.lastError().text();
+    } else {
+        qDebug() << "成功写入历史记录到数据库:" << record.plateID;
+    }
 }
 
 void frmView1::updateHistoryTable() {
