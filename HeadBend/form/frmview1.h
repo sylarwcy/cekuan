@@ -76,7 +76,7 @@ public:
 private:
     void initDatabase();
     void saveRecordToDb(const PlateRecord& record);
-    void loadHistoryFromDb();   // 从数据库加载最近5条记录
+    void loadHistoryFromDb();
 
     void adjustFontSize(QLineEdit* lineEdit, int h, int fontSize);
 
@@ -88,10 +88,11 @@ private:
     // --- 纯视觉触发状态机变量 ---
     bool m_isPlatePresent;
     int m_emptyFrameCount;
-    const int EMPTY_FRAME_LIMIT = 1;
+    // 🌟 修改点 1：将缓冲限制放大到 5 帧，留足空间给长尖细尾进行全量行数累计打捞
+    const int EMPTY_FRAME_LIMIT = 5;
 
-    QList<HalconCpp::HObject> m_preBufferList;
-    const int HEAD_FRAME_COUNT = 3;
+    // 🌟 修改点 2：彻底丢掉 HEAD_FRAME_COUNT 上限，允许完整容纳整个车头尖尖数据链
+    QList<WidthResult> m_preBufferList;
 
     void initCurveChart();
 
@@ -132,12 +133,10 @@ private:
     QVector<double> m_globalContourColsL;
     QVector<double> m_globalContourColsR;
 
-    // 物理宽度缓存
     QVector<double> m_globalPhysicalWidths;
 
     int m_currentGlobalY{0};
 
-    // 缓存绘制图表用的实时值与纠偏值
     QVector<double> m_realtimeWidths;
     QVector<double> m_correctedGlobalWidths;
 };
