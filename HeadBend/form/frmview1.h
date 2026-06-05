@@ -9,20 +9,13 @@
 #include <QSqlQuery>
 #include <QSqlError>
 #include <QDebug>
+#include <databasemanager.h>
+#include <PlateCalibrationManager.h>
+#include "dlgcalibration.h"
 
 namespace Ui {
     class frmView1;
 }
-
-struct PlateRecord {
-    QString plateID{"001"};
-    double length{0};
-    double thickness{0};
-    double targetWidth{0};
-    double avgWidth{0};
-    double maxWidth{0};
-    double minWidth{0};
-};
 
 inline QDataStream &operator<<(QDataStream &out, const PlateRecord &record) {
     out << record.plateID << record.length << record.thickness
@@ -69,6 +62,7 @@ public slots:
     void refreshDataDisp(void);
     void startDispRefresh();
     void onMeasureReady(const WidthResult &res);
+    void on_btn_openCalib_clicked(); // 主界面“设定”按钮的响应槽
 
 public:
     void initForm();
@@ -80,6 +74,12 @@ private:
 
     void adjustFontSize(QLineEdit* lineEdit, int h, int fontSize);
 
+    // bool m_isInCalibrationMode{false};
+    // int m_calibPassCount{0};
+    // bool m_isCalibPaused{false};          // 是否临时暂停接收（用于防反向路过污染）
+    // PlateCalibrationManager m_calibManager;
+    DlgCalibration* m_pCalibDlg{nullptr};
+
     // --- 曲线图相关缓存数据 ---
     QVector<double> m_vecFrameIndex;
     QVector<double> m_vecWidthValue;
@@ -88,10 +88,10 @@ private:
     // --- 纯视觉触发状态机变量 ---
     bool m_isPlatePresent;
     int m_emptyFrameCount;
-    // 🌟 修改点 1：将缓冲限制放大到 5 帧，留足空间给长尖细尾进行全量行数累计打捞
+    // 将缓冲限制放大到 5 帧，留足空间给长尖细尾进行全量行数累计打捞
     const int EMPTY_FRAME_LIMIT = 5;
 
-    // 🌟 修改点 2：彻底丢掉 HEAD_FRAME_COUNT 上限，允许完整容纳整个车头尖尖数据链
+    // 彻底丢掉 HEAD_FRAME_COUNT 上限，允许完整容纳整个车头尖尖数据链
     QList<WidthResult> m_preBufferList;
 
     void initCurveChart();
@@ -120,8 +120,15 @@ private slots:
     void clearCurveChart();
     void onMultiplierChanged(int value);
 
+    // void on_btn_startCalib_clicked();      // 开启自标定
+    // void on_btn_pauseCalib_clicked();      // 暂停/恢复接收开关
+    // void on_btn_removeLastPass_clicked();  // 撤销/删除上一趟
+    // void on_btn_executeCalib_clicked();    // 计算并落盘
+    // void on_btn_cancelCalib_clicked();     // 退出模式
+
 private:
-    void updatePostProcessCurve(int multiplier);
+    // 🌟【签名修正】：将原void更正为QVector<double>，与.cpp完全对齐，消除C2556报错
+    QVector<double> updatePostProcessCurve(int multiplier);
 
     double m_sumWidth = 0.0;
     int m_validFrameCount = 0;
@@ -139,6 +146,13 @@ private:
 
     QVector<double> m_realtimeWidths;
     QVector<double> m_correctedGlobalWidths;
+
+    // 🌟 后台异步服务线程句柄组件
+    QThread* m_pMqttThread{nullptr};
+    WorkerMQTT* m_pMqttWorker{nullptr};
+
+signals:
+    void sig_postPlateReportToWeb(const PlateMqttReportData& data); // 邮寄大数据信号
 };
 
 #endif // FRMVIEW1_H

@@ -2,16 +2,15 @@
 #define WORKERMQTT_H
 
 #include <QObject>
-///////////////////////////////////////////////////////
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QDir>
+#include <QTimer>
 #include "workStationDataStructure.h"
-#include "mqttDataStructure.h"
 #include "qmqtt.h"
 #include "QMqtt_Client.h"
-using namespace  QMQTT;
-
-//Halcon包含
-#include "halcon_inc.h"
-///////////////////////////////////////////////////////
+#include "halconcpp/HalconCpp.h"
 
 class WorkerMQTT : public QObject
 {
@@ -20,42 +19,33 @@ public:
     explicit WorkerMQTT(QObject *parent = nullptr);
     ~WorkerMQTT();
 
-public:
     void mqtt_connect(void);
-    void mqtt_subscribe(void);
     void mqtt_disconnect(void);
 
 public:
-    //mqtt client指针
-    Client *p_mqtt_client;
+    QMQTT::Client *p_mqtt_client;
 
-    int m_mqttUse;                 // 是否启用MQTT（0-禁用，1-启用）
-    int m_mqttTriggerTime;         // MQTT触发时间（单位：ms）
-    QString m_mqttHostname;        // MQTT服务器主机名
-    int m_mqttPort;                // MQTT服务器端口
-    QString m_mqttSaveImagePath;   // MQTT图像保存路径
-    int m_mqttImageCycleNum;       // MQTT图像循环数量
-    QString m_mqttPublicMsg;       // MQTT消息主题-【错误识别的消息】
+    int m_mqttUse;
+    QString m_mqttHostname;
+    int m_mqttPort;
+    QString m_mqttPublicMsg; // 发布主题
 
-signals:
+    // 🌟 临时硬编码的文件服务器配置（后续调试完成可以移入配置文件）
+    QString m_fileServerIP{"115.28.140.23"};
+    QString m_fileServerLocalShare{"//115.28.140.23/FileServerRoot"}; // Windows共享挂载绝对物理路径
+    QString m_webAccessPrefix{"/dist/images"}; // 映射出来的给WEB端访问的相对根路径
 
 public slots:
     void init(const WorkStation_DATA& paramData);
-
     void startConnectMqtt();
+
+    // 🌟 核心新增：在后台线程中异步执行Halcon远程存图、JSON打包、并实时发布给Web端
+    void slot_uploadAndSendReport(const PlateMqttReportData& report);
+
+private slots:
     void connected();
     void disconnected();
-    void subscribed(const QString& topic, const quint8 qos = 0);
-    void published(const QMQTT::Message& message, quint16);
-    void received(const QMQTT::Message& message);
     void error(const QMQTT::ClientError error);
-
-    void parseMqttDataTest(QString data);
-    QString SaveImgToDisk(HObject &ho_image,QString fName,int num);
-    bool DirExist(QString fullPath);
-    bool DirExistEx(QString fullPath);
-
-    void mqtt_public_mydata(void);
 };
 
 #endif // WORKERMQTT_H

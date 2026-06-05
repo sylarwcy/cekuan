@@ -91,6 +91,13 @@ list(REMOVE_ITEM SRC_FILES ${EXCLUDE_FILES})
 add_executable(${project_name} WIN32 MACOSX_BUNDLE
         ${SRC_FILES}
         ${QRC_SOURCES}
+        ../Inc/mulThread/databasemanager.cpp
+        ../Inc/mulThread/databasemanager.h
+        ../Inc/mulThread/PlateCalibrationManager.cpp
+        ../Inc/mulThread/PlateCalibrationManager.h
+        form/dlgcalibration.cpp
+        form/dlgcalibration.h
+        form/dlgcalibration.ui
 )
 
 # 启用预编译头文件支持

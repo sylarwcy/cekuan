@@ -106,6 +106,21 @@ struct WidthResult {
     }
 };
 
+// 打包用于异步发送给文件服务器和 Web 端的所有核心数据包
+struct PlateMqttReportData {
+    QString plateID;
+    double length;
+    double thickness;
+    double targetWidth;
+    double avgWidth;
+    double maxWidth;
+    double minWidth;
+    HalconCpp::HObject ho_fusedImage;   // 原始完整拼接大图
+    HalconCpp::HObject ho_contourImage; // 绘制有红色多边形闭合轮廓的大图
+    QVector<double> curveValues;        // 精细校正后的白线全量离散点列
+};
+
+Q_DECLARE_METATYPE(PlateMqttReportData)
 Q_DECLARE_METATYPE(DualCameraChunk)
 Q_DECLARE_METATYPE(WidthResult)
 
