@@ -85,4 +85,7 @@ public:
     bool m_bCameraLeftOnline;
     bool m_bCameraRightOnline;
     QTimer *m_pReconnectTimer;
+
+    // 依据算法字典刚性对齐，确定为 0.09473 mm
+    double m_mmPerPixelX = 0.09473;
 };

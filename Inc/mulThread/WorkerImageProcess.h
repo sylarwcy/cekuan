@@ -13,13 +13,15 @@ public:
 
     ~WorkerImageProcess();
 
-    void init(const WorkStation_DATA &paramData);
+    void init(const WorkStation_DATA &paramData, double mmPerPixel);
+    // void init(const WorkStation_DATA &paramData);
 
     void setAlgorithm(DualLineScanWidthImgPro *algo) { m_algo = algo; }
 
 public slots:
     // 接收双线阵相机的同步图像
     void imgProcessMeasure(const DualCameraChunk &chunk);
+    void slot_reloadCalibration();
 
 signals:
     // 处理完成，向 UI 或数据库发送结果
@@ -38,7 +40,7 @@ signals:
 private:
     DualLineScanWidthImgPro *m_algo;
     bool m_isProcessing{false};
-
+    WorkStation_DATA m_paramData; // 🌟 新增：备份初始化工位参数，用于重载
 
 private:
     bool m_isPlateActive = false;

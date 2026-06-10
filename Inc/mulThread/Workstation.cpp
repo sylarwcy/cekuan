@@ -110,7 +110,7 @@ void Workstation::SettingQThread() {
     // ==============================================================
     m_pWorkerCamera = new WorkerCamera();
     m_pWorkerImageProcess = new WorkerImageProcess();
-    m_pWorkerImageProcess->init(m_workstation_param);
+    m_pWorkerImageProcess->init(m_workstation_param, m_pWorkerCamera->m_mmPerPixelX);
     m_pWorkerPlc = new WorkerPLC();
 
     // ==============================================================

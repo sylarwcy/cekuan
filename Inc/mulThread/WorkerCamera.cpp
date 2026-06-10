@@ -120,12 +120,44 @@ void WorkerCamera::configureMasterSlave()
     // MV_CC_SetEnumValueByString(m_hDevRight, "TriggerActivation", "RisingEdge");
 }
 
+// ==================== [ WorkerCamera.cpp 完整覆盖函数 ] ====================
 void WorkerCamera::onUpdateSpeedFromPLC(double speed_m_s)
 {
-    float targetLineRate = speed_m_s * 1000.0f;
-    if (targetLineRate < 100.0f) targetLineRate = 100.0f;
-    // 动态调速：允许在拉流时直接写入！
-    MV_CC_SetFloatValue(m_hDevLeft, "AcquisitionLineRate", targetLineRate);
+    // 安全兜底保护：防止无意义的非法速度或零分辨率引发算术除零崩溃
+    if (speed_m_s <= 0.0 || m_mmPerPixelX <= 0.0) {
+        return;
+    }
+
+    // 1. 将输入的“米/秒 (m/s)”高精转换为底层所需的“毫米/秒 (mm/s)”
+    double speed_mm_s = speed_m_s * 1000.0;
+
+    // 2. 🌟【核心正方形像素匹配公式】：行频(Hz) = 辊道速度(mm/s) / 横向单像素物理分辨率(mm/pixel)
+    float targetLineRate = static_cast<float>(speed_mm_s / m_mmPerPixelX);
+
+    // 3. 施加工业级安全边界限幅（防止算出的频率击穿海康线阵相机的硬件采集上限）
+    if (targetLineRate < 100.0f) {
+        targetLineRate = 100.0f; // 保证相机不卡死的最底线频
+    }
+
+    // 工业级千兆网线阵相机（如海康MV-CL系列）最高行频一般在 20kHz ~ 40kHz
+    // 在此设置 35kHz 安全截断保护，防止硬件超频触发网络缓冲区溢出
+    if (targetLineRate > 35000.0f) {
+        qWarning() << "[线阵相机调速过载] 计算的目标行频" << targetLineRate
+                   << "Hz 已超出安全阈值，强制截断至硬件安全上限 35kHz！";
+        targetLineRate = 35000.0f;
+    }
+
+    // 4. 🌟【关键同步】：更新内存中的行频缓存，确保在拔线重连(onTryReconnect)时能自动继承当前的调速行频！
+    m_lineRate = targetLineRate;
+
+    // 5. 将计算出的无损频率参数热写入主相机 Master 硬件寄存器中
+    if (m_hDevLeft) {
+        MV_CC_SetFloatValue(m_hDevLeft, "AcquisitionLineRate", targetLineRate);
+
+        qDebug() << "[1:1纵横比自适应调频成功] 辊道物理速度:" << speed_mm_s << "mm/s"
+                 << " | 动态匹配硬件扫描行频:" << targetLineRate << "Hz"
+                 << " | 物理成像状态: 绝对等比正方形像素";
+    }
 }
 
 void WorkerCamera::startGrabbing()

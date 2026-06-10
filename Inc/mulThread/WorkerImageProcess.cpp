@@ -15,18 +15,24 @@ WorkerImageProcess::~WorkerImageProcess() {
     }
 }
 
-void WorkerImageProcess::init(const WorkStation_DATA &paramData) {
+void WorkerImageProcess::init(const WorkStation_DATA &paramData, double mmPerPixel) {
+    m_mm_per_row = mmPerPixel;
+    m_paramData = paramData; // 🌟 备份常数留给重载使用
+
     if (!m_algo) {
         m_algo = new DualLineScanWidthImgPro();
     }
 
-    // 加载字典 (路径根据你实际的部署位置调整，这里以程序当前运行目录为例)
-    QString masterDict = "./Camera_Master_1DLUT.hdict";
-    QString slaveDict  = "./Camera_Slave_1DLUT_Global.hdict";
+    // 🌟 刚性升级：抛弃死板的相对路径，全部对齐到程序所在的绝对根路径
+    QString appDir = QCoreApplication::applicationDirPath();
+    QString masterDict = appDir + "/Camera_Master_1DLUT.hdict";
+    QString slaveDict  = appDir + "/Camera_Slave_1DLUT.hdict";
 
-    // 参数 0.09473 是你的线阵走带物理当量
-    if (m_algo->initAlgorithm(masterDict, slaveDict, 0.09473)) {
-        qInfo() << "[系统通知] Halcon 测宽算法初始化成功，字典已加载。";
+    // 动态注入底层的多项式测宽拼接引擎中
+    if (m_algo->initAlgorithm(masterDict, slaveDict, mmPerPixel)) {
+        qInfo() << "[系统通知] Halcon 测宽算法启动成功，已加载绝对物理路径字典。";
+    } else {
+        qCritical() << "[系统严重警告] 未找到初始标定参数字典，系统将采用未对齐的默认线性模型运行！";
     }
 }
 
@@ -111,4 +117,21 @@ void WorkerImageProcess::imgProcessMeasure(const DualCameraChunk &chunk) {
         emit sigMeasureReady(res);
     }
     m_isProcessing = false;
+}
+void WorkerImageProcess::slot_reloadCalibration() {
+    // 🌟 保持路径完全一致，实现热覆写
+    QString appDir = QCoreApplication::applicationDirPath();
+    QString masterDict = appDir + "/Camera_Master_1DLUT.hdict";
+    QString slaveDict  = appDir + "/Camera_Slave_1DLUT.hdict";
+
+    if (m_algo) {
+        // 在算法运行时动态无感重新初始化系数矩阵
+        if (m_algo->initAlgorithm(masterDict, slaveDict, m_mm_per_row)) {
+            qInfo() << "======== [自适应热重载大获成功] ========";
+            qInfo() << "[HOT-RELOAD] 后台视觉算法大脑已成功热加载最新生成的自标定常数！";
+            qInfo() << "=======================================";
+        } else {
+            qCritical() << "[HOT-RELOAD] 后台自适应重载失败，请检查配置文件是否被独占或锁死。";
+        }
+    }
 }

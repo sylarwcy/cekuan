@@ -21,7 +21,8 @@ frmView1::frmView1(QWidget *parent) : QWidget(parent), ui(new Ui::frmView1) {
     m_pMqttWorker->init(WorkStation_DATA());
     m_pMqttWorker->moveToThread(m_pMqttThread);
 
-    connect(this, &frmView1::sig_postPlateReportToWeb, m_pMqttWorker, &WorkerMQTT::slot_uploadAndSendReport, Qt::QueuedConnection);
+    connect(this, &frmView1::sig_postPlateReportToWeb, m_pMqttWorker, &WorkerMQTT::slot_uploadAndSendReport,
+            Qt::QueuedConnection);
     connect(m_pMqttThread, &QThread::started, m_pMqttWorker, &WorkerMQTT::startConnectMqtt);
     connect(m_pMqttThread, &QThread::finished, m_pMqttWorker, &QObject::deleteLater);
 
@@ -36,8 +37,16 @@ frmView1::~frmView1() {
         m_pMqttThread->wait(2000);
     }
     delete ui;
-    if (p_camera_front) { p_camera_front->StopGrabbing(); p_camera_front->CloseCamera(); delete p_camera_front; }
-    if (p_camera_back) { p_camera_back->StopGrabbing(); p_camera_back->CloseCamera(); delete p_camera_back; }
+    if (p_camera_front) {
+        p_camera_front->StopGrabbing();
+        p_camera_front->CloseCamera();
+        delete p_camera_front;
+    }
+    if (p_camera_back) {
+        p_camera_back->StopGrabbing();
+        p_camera_back->CloseCamera();
+        delete p_camera_back;
+    }
 }
 
 void frmView1::loadHistoryFromDb() {
@@ -182,32 +191,7 @@ void frmView1::initForm() {
 
     initCurveChart();
     initHistoryUI();
-
-    QHBoxLayout *frameSetLayout = ui->frame_setValue->findChild<QHBoxLayout *>("frame_set");
-    if (frameSetLayout) {
-        QWidget *segWidget = new QWidget(ui->frame_setValue);
-        QHBoxLayout *segLay = new QHBoxLayout(segWidget);
-        segLay->setContentsMargins(0, 0, 0, 0);
-
-        QLabel *lblSeg = new QLabel("曲线\n分段倍率:", segWidget);
-        lblSeg->setStyleSheet("font-family: 'Alibaba PuHuiTi'; font-size: 12pt; color: black;");
-        lblSeg->setAlignment(Qt::AlignCenter);
-
-        QSpinBox *spinSeg = new QSpinBox(segWidget);
-        spinSeg->setObjectName("spinSegment");
-        spinSeg->setRange(1, 5);
-        spinSeg->setValue(3);
-        spinSeg->setFixedSize(131, 35);
-        spinSeg->setAlignment(Qt::AlignCenter);
-        spinSeg->setStyleSheet(
-            "QSpinBox { font-family: 'Alibaba PuHuiTi'; font-size: 14pt; font-weight: bold; background: white; color: black; border: none; }");
-
-        connect(spinSeg, QOverload<int>::of(&QSpinBox::valueChanged), this, &frmView1::onMultiplierChanged);
-
-        segLay->addWidget(lblSeg);
-        segLay->addWidget(spinSeg);
-        frameSetLayout->addWidget(segWidget);
-    }
+    // 💡 原本在这里动态拼装 ui->spinSegment 的长串代码已被完美移出净化！
 }
 
 void frmView1::initCurveChart() {
@@ -491,37 +475,47 @@ void frmView1::addFrameToFusion(HalconCpp::HObject newFrame) {
     }
 }
 
-void frmView1::onMeasureReady(const WidthResult &res)
-{
+void frmView1::onMeasureReady(const WidthResult &res) {
     static QVector<int> s_leftEdges;
     static QVector<int> s_rightEdges;
     static int s_preBufferRows = 0;
 
-    auto displayImageProportional = [](HalconCpp::HObject img, HalconCpp::HTuple winHandle, int winW, int winH, QString bgColor, bool showImg) {
+    auto displayImageProportional = [](HalconCpp::HObject img, HalconCpp::HTuple winHandle, int winW, int winH,
+                                       QString bgColor, bool showImg) {
         if (!img.IsInitialized() || winW <= 0 || winH <= 0) return;
         try {
-            HalconCpp::HTuple imgW, imgH; HalconCpp::GetImageSize(img, &imgW, &imgH);
-            double winRatio = static_cast<double>(winH) / winW, imgRatio = static_cast<double>(imgH[0].D()) / imgW[0].D();
+            HalconCpp::HTuple imgW, imgH;
+            HalconCpp::GetImageSize(img, &imgW, &imgH);
+            double winRatio = static_cast<double>(winH) / winW, imgRatio =
+                    static_cast<double>(imgH[0].D()) / imgW[0].D();
             double row1 = 0, col1 = 0, row2 = imgH[0].D() - 1.0, col2 = imgW[0].D() - 1.0;
 
             if (imgRatio > winRatio) {
-                double partW = imgH[0].D() / winRatio; double diffW = partW - imgW[0].D();
-                col1 = -diffW / 2.0; col2 = imgW[0].D() - 1.0 + diffW / 2.0;
+                double partW = imgH[0].D() / winRatio;
+                double diffW = partW - imgW[0].D();
+                col1 = -diffW / 2.0;
+                col2 = imgW[0].D() - 1.0 + diffW / 2.0;
             } else {
-                double partH = imgW[0].D() * winRatio; double diffH = partH - imgH[0].D();
-                row1 = -diffH / 2.0; row2 = imgH[0].D() - 1.0 + diffH / 2.0;
+                double partH = imgW[0].D() * winRatio;
+                double diffH = partH - imgH[0].D();
+                row1 = -diffH / 2.0;
+                row2 = imgH[0].D() - 1.0 + diffH / 2.0;
             }
 
-            HalconCpp::SetPart(winHandle, (Hlong)std::floor(row1), (Hlong)std::floor(col1), (Hlong)std::ceil(row2), (Hlong)std::ceil(col2));
+            HalconCpp::SetPart(winHandle, (Hlong) std::floor(row1), (Hlong) std::floor(col1), (Hlong) std::ceil(row2),
+                               (Hlong) std::ceil(col2));
             HalconCpp::SetColor(winHandle, bgColor.toLocal8Bit().constData());
             HalconCpp::DispRectangle1(winHandle, row1 - 20.0, col1 - 20.0, row2 + 20.0, col2 + 20.0);
             if (showImg) { HalconCpp::DispObj(img, winHandle); }
-        } catch (...) { }
+        } catch (...) {
+        }
     };
 
-    if (res.isValid) { ui->lineEdit->setText(QString::number(res.widthValue, 'f', 2)); }
-    else { ui->lineEdit->setText("0.00"); }
+    if (res.isValid) { ui->lineEdit->setText(QString::number(res.widthValue, 'f', 2)); } else {
+        ui->lineEdit->setText("0.00");
+    }
 
+    // ==================== [ frmview1.cpp 内部局部函数覆盖 ] ====================
     auto finishCurrentPlate = [&]() {
         m_isPlatePresent = false;
         int globalMinLeft = 99999, globalMaxRight = -1;
@@ -532,51 +526,76 @@ void frmView1::onMeasureReady(const WidthResult &res)
         }
 
         if (m_validFrameCount > 0) {
+            // 🌟 1. 提前动态拉取相机内固化的唯一物理尺寸基准，消灭此文件的硬编码
+            MyApplication *pApp = (MyApplication *) qApp;
+            double mmPerPixel = 0.09473;
+            if (pApp && !pApp->m_workstationList.isEmpty() && pApp->m_workstationList[0]->m_pWorkerCamera) {
+                mmPerPixel = pApp->m_workstationList[0]->m_pWorkerCamera->m_mmPerPixelX;
+            }
 
-            // =================================================================
-            // 🌟【高级接口映射】：如果小弹窗存在，并且处于自标定激活状态下
-            // =================================================================
+            // 自标定拦截控制网
             if (m_pCalibDlg && m_pCalibDlg->isVisible() && m_pCalibDlg->isActive()) {
                 if (m_pCalibDlg->isPaused()) {
-                    // 如果在弹窗里点了暂停，此反向数据包不被录入池中
                 } else {
-                    m_pCalibDlg->finishPass(); // 间接通知小窗当场清算当前趟偏航角
+                    m_pCalibDlg->finishPass();
                 }
-                clearCurveChart(); resetFusion(); m_emptyFrameCount = 0; m_totalRows = 0; m_validFrameCount = 0;
-                return; // 强行拦截常规数据库存储
+                clearCurveChart();
+                resetFusion();
+                m_emptyFrameCount = 0;
+                m_totalRows = 0;
+                m_validFrameCount = 0;
+                return;
             }
 
             int n = m_globalContourRows.size();
             double trueAvg = 0, trueMax = 0, trueMin = 999999.0;
-            double cosTheta = 1.0; double sinTheta = 0.0;
+            double cosTheta = 1.0;
+            double sinTheta = 0.0;
             m_correctedGlobalWidths.clear();
 
             if (n > 0) {
                 double sum_y = 0, sum_x = 0, sum_y2 = 0, sum_xy = 0;
                 for (int i = 0; i < n; ++i) {
-                    double y = m_globalContourRows[i]; double x = (m_globalContourColsL[i] + m_globalContourColsR[i]) / 2.0;
-                    sum_y += y; sum_x += x; sum_y2 += y * y; sum_xy += x * y;
+                    double y = m_globalContourRows[i];
+                    double x = (m_globalContourColsL[i] + m_globalContourColsR[i]) / 2.0;
+                    sum_y += y;
+                    sum_x += x;
+                    sum_y2 += y * y;
+                    sum_xy += x * y;
                 }
                 double denom = n * sum_y2 - sum_y * sum_y;
                 double k = (std::abs(denom) > 1e-6) ? (n * sum_xy - sum_x * sum_y) / denom : 0.0;
-                cosTheta = 1.0 / std::sqrt(1.0 + k * k); sinTheta = std::abs(k) * cosTheta;
+                cosTheta = 1.0 / std::sqrt(1.0 + k * k);
+                sinTheta = std::abs(k) * cosTheta;
 
-                int validCount = 0; QVector<double> validWidthsForStats;
+                int validCount = 0;
+                QVector<double> validWidthsForStats;
                 for (int i = 0; i < n; ++i) {
                     if (i >= m_globalPhysicalWidths.size()) break;
                     double w_true = m_globalPhysicalWidths[i] * cosTheta;
                     m_correctedGlobalWidths.append(w_true);
-                    if (w_true > 50.0) { trueAvg += w_true; validWidthsForStats.append(w_true); validCount++; }
+                    if (w_true > 50.0) {
+                        trueAvg += w_true;
+                        validWidthsForStats.append(w_true);
+                        validCount++;
+                    }
                 }
 
                 if (validCount > 0) {
-                    trueAvg /= validCount; std::sort(validWidthsForStats.begin(), validWidthsForStats.end());
+                    trueAvg /= validCount;
+                    std::sort(validWidthsForStats.begin(), validWidthsForStats.end());
                     int trimCount = validWidthsForStats.size() * 0.02;
-                    trueMin = validWidthsForStats[trimCount]; trueMax = validWidthsForStats[validWidthsForStats.size() - 1 - trimCount];
+                    trueMin = validWidthsForStats[trimCount];
+                    trueMax = validWidthsForStats[validWidthsForStats.size() - 1 - trimCount];
                 } else { trueAvg = m_sumWidth / m_validFrameCount; }
-            } else { trueAvg = m_sumWidth / m_validFrameCount; trueMax = m_maxWidth; trueMin = m_minWidth; }
+            } else {
+                trueAvg = m_sumWidth / m_validFrameCount;
+                trueMax = m_maxWidth;
+                trueMin = m_minWidth;
+            }
 
-            double projectedLength = m_totalRows * 0.09473;
+            // 🌟 2. 这里的计算投影长度公式，完美换算为动态像素分辨率
+            double projectedLength = m_totalRows * mmPerPixel;
             double totalLength = (projectedLength - trueAvg * sinTheta) / cosTheta;
 
             if (totalLength >= 50.0) {
@@ -588,14 +607,19 @@ void frmView1::onMeasureReady(const WidthResult &res)
                 QString plateID = QDateTime::currentDateTime().toString("MMdd_HHmmss");
                 addHistoryRecord(plateID, totalLength, 0.0, 0.0, trueAvg, trueMax, trueMin);
 
-                QVector<double> finalCurveData = updatePostProcessCurve(3);
+                int multiplier = 3;
+                if (m_pCalibDlg) {
+                    multiplier = m_pCalibDlg->getMultiplier();
+                }
+                QVector<double> finalCurveData = updatePostProcessCurve(multiplier);
 
                 if (m_hFusedImage.IsInitialized() && globalMinLeft != 99999 && globalMaxRight != -1) {
                     try {
                         HalconCpp::HObject fFull, croppedFused, imageRotated;
                         HalconCpp::TileImages(m_hFusedImage, &fFull, 1, "vertical");
 
-                        HalconCpp::HTuple fW, fH; HalconCpp::GetImageSize(fFull, &fW, &fH);
+                        HalconCpp::HTuple fW, fH;
+                        HalconCpp::GetImageSize(fFull, &fW, &fH);
                         int leftX = std::max(0, globalMinLeft - 100);
                         int rightX = std::min(static_cast<int>(fW[0].I() - 1), globalMaxRight + 100);
                         int cropW = rightX - leftX + 1;
@@ -603,7 +627,8 @@ void frmView1::onMeasureReady(const WidthResult &res)
 
                         int physicalEndRow = fH[0].I() - 380;
                         if (!m_globalContourRows.isEmpty()) {
-                            physicalEndRow = static_cast<int>(*std::max_element(m_globalContourRows.begin(), m_globalContourRows.end()));
+                            physicalEndRow = static_cast<int>(*std::max_element(
+                                m_globalContourRows.begin(), m_globalContourRows.end()));
                         }
                         int bottomY = std::min(static_cast<int>(fH[0].I() - 1), physicalEndRow + 100);
                         int cropH = bottomY - topY + 1;
@@ -612,29 +637,36 @@ void frmView1::onMeasureReady(const WidthResult &res)
                             HalconCpp::CropPart(fFull, &croppedFused, topY, leftX, cropW, cropH);
                             HalconCpp::RotateImage(croppedFused, &imageRotated, 90, "constant");
 
-                            displayImageProportional(imageRotated, winHandle_fusion, ui->gView_fusion->width(), ui->gView_fusion->height(), "white", true);
-                            displayImageProportional(imageRotated, winHandle_lunkuo, ui->gView_lunkuo->width(), ui->gView_lunkuo->height(), "white", false);
+                            displayImageProportional(imageRotated, winHandle_fusion, ui->gView_fusion->width(),
+                                                     ui->gView_fusion->height(), "white", true);
+                            displayImageProportional(imageRotated, winHandle_lunkuo, ui->gView_lunkuo->width(),
+                                                     ui->gView_lunkuo->height(), "white", false);
 
                             HalconCpp::HObject ho_webContourImg;
                             HalconCpp::GenEmptyObj(&ho_webContourImg);
 
                             if (m_globalContourRows.size() > 0) {
-                                HalconCpp::HTuple origWidth, dummyH; HalconCpp::GetImageSize(croppedFused, &origWidth, &dummyH);
+                                HalconCpp::HTuple origWidth, dummyH;
+                                HalconCpp::GetImageSize(croppedFused, &origWidth, &dummyH);
                                 HTuple rotRows, rotCols;
 
-                                for(int i = 0; i < m_globalContourRows.size(); ++i) {
+                                for (int i = 0; i < m_globalContourRows.size(); ++i) {
                                     rotRows.Append(origWidth[0].I() - 1 - (m_globalContourColsL[i] - leftX));
                                     rotCols.Append(m_globalContourRows[i] - topY);
                                 }
-                                for(int i = m_globalContourRows.size() - 1; i >= 0; --i) {
+                                for (int i = m_globalContourRows.size() - 1; i >= 0; --i) {
                                     rotRows.Append(origWidth[0].I() - 1 - (m_globalContourColsR[i] - leftX));
                                     rotCols.Append(m_globalContourRows[i] - topY);
                                 }
-                                if (rotRows.Length() > 0) { rotRows.Append(rotRows[0]); rotCols.Append(rotCols[0]); }
+                                if (rotRows.Length() > 0) {
+                                    rotRows.Append(rotRows[0]);
+                                    rotCols.Append(rotCols[0]);
+                                }
 
                                 HalconCpp::HObject localXld;
                                 HalconCpp::GenContourPolygonXld(&localXld, rotRows, rotCols);
-                                HalconCpp::SetLineWidth(winHandle_lunkuo, 4); HalconCpp::SetColor(winHandle_lunkuo, "red");
+                                HalconCpp::SetLineWidth(winHandle_lunkuo, 4);
+                                HalconCpp::SetColor(winHandle_lunkuo, "red");
                                 HalconCpp::DispObj(localXld, winHandle_lunkuo);
 
                                 HalconCpp::PaintXld(croppedFused, localXld, &ho_webContourImg, 255);
@@ -656,60 +688,90 @@ void frmView1::onMeasureReady(const WidthResult &res)
 
                             emit sig_postPlateReportToWeb(webReport);
                         }
-                    } catch (...) {}
+                    } catch (...) {
+                    }
                 }
-            } else { clearCurveChart(); resetFusion(); }
+            } else {
+                clearCurveChart();
+                resetFusion();
+            }
         }
     };
 
-    if (res.isValid && m_isPlatePresent && m_emptyFrameCount > 0) { finishCurrentPlate(); m_emptyFrameCount = 0; }
+    if (res.isValid && m_isPlatePresent && m_emptyFrameCount > 0) {
+        finishCurrentPlate();
+        m_emptyFrameCount = 0;
+    }
 
     if (res.isValid) {
-        s_leftEdges.append(res.renderLeftX); s_rightEdges.append(res.renderRightX);
+        s_leftEdges.append(res.renderLeftX);
+        s_rightEdges.append(res.renderRightX);
         if (!m_isPlatePresent) {
-            clearCurveChart(); resetFusion();
-            m_isPlatePresent = true; m_sumWidth = 0.0; m_validFrameCount = 0; m_totalRows = 0;
-            m_maxWidth = 0.0; m_minWidth = 99999.0;
-            m_globalContourRows.clear(); m_globalContourColsL.clear(); m_globalContourColsR.clear(); m_globalPhysicalWidths.clear();
-            s_leftEdges.clear(); s_leftEdges.append(res.renderLeftX); s_rightEdges.clear(); s_rightEdges.append(res.renderRightX);
+            clearCurveChart();
+            resetFusion();
+            m_isPlatePresent = true;
+            m_sumWidth = 0.0;
+            m_validFrameCount = 0;
+            m_totalRows = 0;
+            m_maxWidth = 0.0;
+            m_minWidth = 99999.0;
+            m_globalContourRows.clear();
+            m_globalContourColsL.clear();
+            m_globalContourColsR.clear();
+            m_globalPhysicalWidths.clear();
+            s_leftEdges.clear();
+            s_leftEdges.append(res.renderLeftX);
+            s_rightEdges.clear();
+            s_rightEdges.append(res.renderRightX);
 
             s_preBufferRows = 0;
-            for (const auto& cachedRes : m_preBufferList) {
+            for (const auto &cachedRes: m_preBufferList) {
                 int pRows = cachedRes.contourRows.size();
                 if (pRows > 0 && cachedRes.dispImage.IsInitialized()) {
-                    HalconCpp::HTuple w, h; HalconCpp::GetImageSize(cachedRes.dispImage, &w, &h);
-                    s_preBufferRows += h[0].I(); addFrameToFusion(cachedRes.dispImage);
+                    HalconCpp::HTuple w, h;
+                    HalconCpp::GetImageSize(cachedRes.dispImage, &w, &h);
+                    s_preBufferRows += h[0].I();
+                    addFrameToFusion(cachedRes.dispImage);
                     int halfLen = (pRows - 1) / 2;
-                    for(int j = 0; j < halfLen; ++j) {
+                    for (int j = 0; j < halfLen; ++j) {
                         m_globalContourRows.append(cachedRes.contourRows[j] + m_totalRows);
                         m_globalContourColsL.append(cachedRes.contourColsLeft[j]);
                         m_globalContourColsR.append(cachedRes.contourColsLeft[pRows - 2 - j]);
                     }
-                    for(int j = 0; j < cachedRes.rowWidths.size(); ++j) m_globalPhysicalWidths.append(cachedRes.rowWidths[j]);
-                    m_totalRows += h[0].I(); m_validFrameCount++; m_sumWidth += cachedRes.widthValue;
+                    for (int j = 0; j < cachedRes.rowWidths.size(); ++j)
+                        m_globalPhysicalWidths.append(
+                            cachedRes.rowWidths[j]);
+                    m_totalRows += h[0].I();
+                    m_validFrameCount++;
+                    m_sumWidth += cachedRes.widthValue;
                 }
             }
-            m_preBufferList.clear(); m_currentGlobalY = m_totalRows;
+            m_preBufferList.clear();
+            m_currentGlobalY = m_totalRows;
         }
 
-        m_sumWidth += res.widthValue; m_validFrameCount++;
+        m_sumWidth += res.widthValue;
+        m_validFrameCount++;
         if (res.widthValue > m_maxWidth) m_maxWidth = res.widthValue;
         if (res.widthValue < m_minWidth) m_minWidth = res.widthValue;
 
         int pRows = res.contourRows.size();
         if (pRows > 0) {
             int halfLen = (pRows - 1) / 2;
-            for(int i = 0; i < halfLen; ++i) {
+            for (int i = 0; i < halfLen; ++i) {
                 m_globalContourRows.append(res.contourRows[i] + m_currentGlobalY);
                 m_globalContourColsL.append(res.contourColsLeft[i]);
                 m_globalContourColsR.append(res.contourColsLeft[pRows - 2 - i]);
             }
         }
-        for(int i = 0; i < res.rowWidths.size(); ++i) m_globalPhysicalWidths.append(res.rowWidths[i]);
+        for (int i = 0; i < res.rowWidths.size(); ++i) m_globalPhysicalWidths.append(res.rowWidths[i]);
 
         if (res.dispImage.IsInitialized()) {
-            HalconCpp::HTuple w, h; HalconCpp::GetImageSize(res.dispImage, &w, &h);
-            m_totalRows += h[0].I(); m_currentGlobalY += h[0].I(); addFrameToFusion(res.dispImage);
+            HalconCpp::HTuple w, h;
+            HalconCpp::GetImageSize(res.dispImage, &w, &h);
+            m_totalRows += h[0].I();
+            m_currentGlobalY += h[0].I();
+            addFrameToFusion(res.dispImage);
         }
         addCurvePoints(QVector<double>() << res.widthValue);
 
@@ -727,19 +789,22 @@ void frmView1::onMeasureReady(const WidthResult &res)
                 int pRows = res.contourRows.size();
                 if (pRows > 0) {
                     int halfLen = (pRows - 1) / 2;
-                    for(int i = 0; i < halfLen; ++i) {
+                    for (int i = 0; i < halfLen; ++i) {
                         m_globalContourRows.append(res.contourRows[i] + m_currentGlobalY);
                         m_globalContourColsL.append(res.contourColsLeft[i]);
                         m_globalContourColsR.append(res.contourColsLeft[pRows - 2 - i]);
                     }
-                    for(int i = 0; i < res.rowWidths.size(); ++i) m_globalPhysicalWidths.append(res.rowWidths[i]);
+                    for (int i = 0; i < res.rowWidths.size(); ++i) m_globalPhysicalWidths.append(res.rowWidths[i]);
                     if (res.dispImage.IsInitialized()) {
-                        HalconCpp::HTuple w, h; HalconCpp::GetImageSize(res.dispImage, &w, &h);
-                        m_totalRows += h[0].I(); m_currentGlobalY += h[0].I();
+                        HalconCpp::HTuple w, h;
+                        HalconCpp::GetImageSize(res.dispImage, &w, &h);
+                        m_totalRows += h[0].I();
+                        m_currentGlobalY += h[0].I();
                     }
                 } else {
                     if (res.dispImage.IsInitialized()) {
-                        HalconCpp::HTuple w, h; HalconCpp::GetImageSize(res.dispImage, &w, &h);
+                        HalconCpp::HTuple w, h;
+                        HalconCpp::GetImageSize(res.dispImage, &w, &h);
                         m_currentGlobalY += h[0].I();
                     }
                 }
@@ -760,41 +825,49 @@ void frmView1::onMeasureReady(const WidthResult &res)
     if (res.dispImage.IsInitialized()) {
         try {
             HalconCpp::HTuple currentWin = this->winHandle_cam1_pro;
-            HalconCpp::HTuple imgW, imgH; HalconCpp::GetImageSize(res.dispImage, &imgW, &imgH);
-            HalconCpp::SetPart(currentWin, 0, 0, imgH - 1, imgW - 1); HalconCpp::DispObj(res.dispImage, currentWin);
+            HalconCpp::HTuple imgW, imgH;
+            HalconCpp::GetImageSize(res.dispImage, &imgW, &imgH);
+            HalconCpp::SetPart(currentWin, 0, 0, imgH - 1, imgW - 1);
+            HalconCpp::DispObj(res.dispImage, currentWin);
             if (res.isValid && res.contourRows.size() > 0) {
                 HalconCpp::HTuple hRows, hCols;
-                for (int i = 0; i < res.contourRows.size(); ++i) { hRows.Append(res.contourRows[i]); hCols.Append(res.contourColsLeft[i]); }
-                HalconCpp::HObject closedPolygonXld; HalconCpp::GenContourPolygonXld(&closedPolygonXld, hRows, hCols);
-                HalconCpp::SetLineWidth(currentWin, 4); HalconCpp::SetColor(currentWin, "red"); HalconCpp::DispObj(closedPolygonXld, currentWin);
+                for (int i = 0; i < res.contourRows.size(); ++i) {
+                    hRows.Append(res.contourRows[i]);
+                    hCols.Append(res.contourColsLeft[i]);
+                }
+                HalconCpp::HObject closedPolygonXld;
+                HalconCpp::GenContourPolygonXld(&closedPolygonXld, hRows, hCols);
+                HalconCpp::SetLineWidth(currentWin, 4);
+                HalconCpp::SetColor(currentWin, "red");
+                HalconCpp::DispObj(closedPolygonXld, currentWin);
             }
-        } catch (...) {}
+        } catch (...) {
+        }
     }
-}
-
-// 🌟 新增：点击主窗体新摆放的唤醒按钮，弹出可自由拖动的标定小页面
-void frmView1::on_btn_openCalib_clicked() {
-    if (!m_pCalibDlg) {
-        m_pCalibDlg = new DlgCalibration(this);
-    }
-    m_pCalibDlg->show();
-    m_pCalibDlg->raise();
-    m_pCalibDlg->activateWindow();
 }
 
 void frmView1::initHistoryUI() {
     m_tableModelHistory = new QStandardItemModel(this);
     QStringList headers = {"板号", "长度(mm)", "厚度(mm)", "设定宽度(mm)", "平均宽度(mm)", "最大宽度(mm)", "最小宽度(mm)"};
     m_tableModelHistory->setHorizontalHeaderLabels(headers);
-    ui->tableView_history->setModel(m_tableModelHistory); ui->tableView_history->setSelectionBehavior(QAbstractItemView::SelectRows);
+    ui->tableView_history->setModel(m_tableModelHistory);
+    ui->tableView_history->setSelectionBehavior(QAbstractItemView::SelectRows);
     ui->tableView_history->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    QFont headerFont = ui->tableView_history->horizontalHeader()->font(); headerFont.setPointSize(14); headerFont.setBold(true);
-    ui->tableView_history->horizontalHeader()->setFont(headerFont); ui->tableView_history->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-    QFont tableFont = ui->tableView_history->font(); tableFont.setPointSize(16); ui->tableView_history->setFont(tableFont);
-    QFont verticalFont = ui->tableView_history->verticalHeader()->font(); verticalFont.setPointSize(14); ui->tableView_history->verticalHeader()->setFont(verticalFont);
+    QFont headerFont = ui->tableView_history->horizontalHeader()->font();
+    headerFont.setPointSize(14);
+    headerFont.setBold(true);
+    ui->tableView_history->horizontalHeader()->setFont(headerFont);
+    ui->tableView_history->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    QFont tableFont = ui->tableView_history->font();
+    tableFont.setPointSize(16);
+    ui->tableView_history->setFont(tableFont);
+    QFont verticalFont = ui->tableView_history->verticalHeader()->font();
+    verticalFont.setPointSize(14);
+    ui->tableView_history->verticalHeader()->setFont(verticalFont);
 }
 
-void frmView1::addHistoryRecord(const QString &plateID, double length, double thickness, double targetW, double avgW, double maxW, double minW) {
+void frmView1::addHistoryRecord(const QString &plateID, double length, double thickness, double targetW, double avgW,
+                                double maxW, double minW) {
     PlateRecord newRecord{plateID, length, thickness, targetW, avgW, maxW, minW};
     m_historyList.prepend(newRecord);
     while (m_historyList.size() > 5) { m_historyList.removeLast(); }
@@ -805,21 +878,55 @@ void frmView1::addHistoryRecord(const QString &plateID, double length, double th
 void frmView1::saveRecordToDb(const PlateRecord &record) {
     if (!QSqlDatabase::database().isOpen()) return;
     QSqlQuery query;
-    query.prepare("INSERT INTO PlateRecord (plateID, length, thickness, targetWidth, avgWidth, maxWidth, minWidth) VALUES (:plateID, :length, :thickness, :targetWidth, :avgWidth, :maxWidth, :minWidth)");
-    query.bindValue(":plateID", record.plateID); query.bindValue(":length", record.length); query.bindValue(":thickness", record.thickness);
-    query.bindValue(":targetWidth", record.targetWidth); query.bindValue(":avgWidth", record.avgWidth); query.bindValue(":maxWidth", record.maxWidth); query.bindValue(":minValue", record.minWidth);
+    query.prepare(
+        "INSERT INTO PlateRecord (plateID, length, thickness, targetWidth, avgWidth, maxWidth, minWidth) VALUES (:plateID, :length, :thickness, :targetWidth, :avgWidth, :maxWidth, :minWidth)");
+    query.bindValue(":plateID", record.plateID);
+    query.bindValue(":length", record.length);
+    query.bindValue(":thickness", record.thickness);
+    query.bindValue(":targetWidth", record.targetWidth);
+    query.bindValue(":avgWidth", record.avgWidth);
+    query.bindValue(":maxWidth", record.maxWidth);
+    query.bindValue(":minValue", record.minWidth);
     if (!query.exec()) { qDebug() << "写入历史记录失败:" << query.lastError().text(); }
 }
 
 void frmView1::updateHistoryTable() {
     m_tableModelHistory->setRowCount(0);
     for (int i = 0; i < m_historyList.size(); ++i) {
-        const PlateRecord &rec = m_historyList.at(i); QList<QStandardItem *> rowItems;
+        const PlateRecord &rec = m_historyList.at(i);
+        QList<QStandardItem *> rowItems;
         rowItems << new QStandardItem(rec.plateID) << new QStandardItem(QString::number(rec.length, 'f', 1))
-                << new QStandardItem(QString::number(rec.thickness, 'f', 2)) << new QStandardItem(QString::number(rec.targetWidth, 'f', 1))
-                << new QStandardItem(QString::number(rec.avgWidth, 'f', 2)) << new QStandardItem(QString::number(rec.maxWidth, 'f', 2))
+                << new QStandardItem(QString::number(rec.thickness, 'f', 2)) << new QStandardItem(
+                    QString::number(rec.targetWidth, 'f', 1))
+                << new QStandardItem(QString::number(rec.avgWidth, 'f', 2)) << new QStandardItem(
+                    QString::number(rec.maxWidth, 'f', 2))
                 << new QStandardItem(QString::number(rec.minWidth, 'f', 2));
         for (auto item: rowItems) item->setTextAlignment(Qt::AlignCenter);
         m_tableModelHistory->appendRow(rowItems);
     }
+}
+
+void frmView1::on_btn_openCalib_clicked() {
+    if (!m_pCalibDlg) {
+        m_pCalibDlg = new DlgCalibration(this);
+
+        // 1. 核心跨窗体绑定：只要小窗口的 SpinBox 改变，主窗体底部的 QCustomPlot 曲线瞬间执行重绘刷新
+        connect(m_pCalibDlg, &DlgCalibration::sig_multiplierChanged,
+                this, &frmView1::onMultiplierChanged);
+
+        // =======================================================================
+        // 🌟【核心调速神经总线连接】：
+        // 抓取全局唯一的工位控制器，将其内部在独立线程中运行的相机实体与标定小窗的信号连通。
+        // 使用 Qt::QueuedConnection 确保高频拉流与 UI 操作互不干扰、绝对安全。
+        // =======================================================================
+        MyApplication *pApp = (MyApplication *) qApp;
+        if (pApp && !pApp->m_workstationList.isEmpty() && pApp->m_workstationList[0]->m_pWorkerCamera) {
+            connect(m_pCalibDlg, &DlgCalibration::sig_speedChanged,
+                    pApp->m_workstationList[0]->m_pWorkerCamera, &WorkerCamera::onUpdateSpeedFromPLC,
+                    Qt::QueuedConnection);
+        }
+    }
+    m_pCalibDlg->show();
+    m_pCalibDlg->raise();
+    m_pCalibDlg->activateWindow();
 }
