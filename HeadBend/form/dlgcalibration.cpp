@@ -1,30 +1,29 @@
-﻿// ==================== [ dlgcalibration.cpp ] ====================
-#include "dlgcalibration.h"
+﻿#include "dlgcalibration.h"
 #include "MyApplication.h"
 #include "ui_dlgcalibration.h"
+#include <QMessageBox>
+#include <cmath>
+#include <QFile>
+#include <QTextStream>
+#include <QDir>
+#include <QDateTime>
 
 DlgCalibration::DlgCalibration(QWidget *parent) : QDialog(parent), ui(new Ui::DlgCalibration) {
     ui->setupUi(this);
 
-    // 让弹窗变为独立的可自由拖动、带有关闭按钮的标准独立小页面
     setWindowFlags(Qt::Window | Qt::WindowCloseButtonHint | Qt::WindowTitleHint | Qt::CustomizeWindowHint);
-    setWindowTitle("标准样坯在线自标定管理系统");
+    setWindowTitle("标准样坯在线自标定与空间重叠区域对齐中心");
 
-    // 依据你更新的布局调整弹窗初始大小，防止内容拥挤
-    this->resize(750, 480);
-    this->setMinimumSize(750, 480);
+    this->resize(720, 490);
+    this->setMinimumSize(720, 490);
+    this->setMaximumSize(720, 490);
 
     ui->btn_pauseCalib->setEnabled(false);
     ui->btn_executeCalib->setEnabled(false);
     ui->btn_removeLastPass->setEnabled(false);
 
-    // 🌟 安全的显式信号连接：避免自动命名规范导致的重复触发Bug
-    connect(ui->spinSegment, QOverload<int>::of(&QSpinBox::valueChanged),
-            this, &DlgCalibration::slot_spinSegmentChanged);
-
-    // 绑定到 DlgCalibration::DlgCalibration 构造函数的末尾
-    connect(ui->lineEdit, &QLineEdit::editingFinished,
-            this, &DlgCalibration::slot_speedEditingFinished);
+    connect(ui->spinSegment, QOverload<int>::of(&QSpinBox::valueChanged), this, &DlgCalibration::slot_spinSegmentChanged);
+    connect(ui->lineEdit, &QLineEdit::editingFinished, this, &DlgCalibration::slot_speedEditingFinished);
 }
 
 DlgCalibration::~DlgCalibration() {
@@ -32,69 +31,116 @@ DlgCalibration::~DlgCalibration() {
 }
 
 int DlgCalibration::getMultiplier() const {
-    // 🌟 实现对外接口：无条件返回当前 UI 上的真实倍率数值
     return ui->spinSegment->value();
 }
 
 void DlgCalibration::slot_spinSegmentChanged(int value) {
-    // 🌟 信号路由中转：直接向下发传递
     emit sig_multiplierChanged(value);
 }
 
-void DlgCalibration::feedFrame(const WidthResult& res) {
-    if (m_isInCalibrationMode && !m_isCalibPaused) {
-        m_calibManager.feedCalibrationFrame(res);
+void DlgCalibration::slot_speedEditingFinished() {
+    double speed_mm_s = ui->lineEdit->text().toDouble();
+    if (speed_mm_s <= 0.0) return;
+    double speed_m_s = speed_mm_s / 1000.0;
+    emit sig_speedChanged(speed_m_s);
+    ui->lbl_calibStatus->setText(QString("辊道速度已更新为: %1 mm/s，正在自适应微调相机物理行频...").arg(speed_mm_s));
+}
+
+// 🌟 指挥指令下发
+void DlgCalibration::on_btn_autoMasterPixel_clicked() {
+    m_currentStep = 1;
+    MyApplication *pApp = (MyApplication *) qApp;
+    if (pApp && !pApp->m_workstationList.isEmpty() && pApp->m_workstationList[0]->m_pWorkerImageProcess) {
+        QMetaObject::invokeMethod(pApp->m_workstationList[0]->m_pWorkerImageProcess, "slot_setCalibMode", Qt::QueuedConnection, Q_ARG(int, 1));
+        ui->lbl_calibStatus->setText("步骤1激态：底层管道已被强制替换为主相机，请走板...");
     }
 }
 
-// ==================== [ dlgcalibration.cpp ] ====================
+void DlgCalibration::on_btn_autoSlavePixel_clicked() {
+    m_currentStep = 2;
+    MyApplication *pApp = (MyApplication *) qApp;
+    if (pApp && !pApp->m_workstationList.isEmpty() && pApp->m_workstationList[0]->m_pWorkerImageProcess) {
+        QMetaObject::invokeMethod(pApp->m_workstationList[0]->m_pWorkerImageProcess, "slot_setCalibMode", Qt::QueuedConnection, Q_ARG(int, 2));
+        ui->lbl_calibStatus->setText("步骤2激态：底层管道已被强制替换为副相机，请走板...");
+    }
+}
+
+void DlgCalibration::on_btn_autoBaseline_clicked() {
+    m_currentStep = 3;
+    MyApplication *pApp = (MyApplication *) qApp;
+    if (pApp && !pApp->m_workstationList.isEmpty() && pApp->m_workstationList[0]->m_pWorkerImageProcess) {
+        QMetaObject::invokeMethod(pApp->m_workstationList[0]->m_pWorkerImageProcess, "slot_setCalibMode", Qt::QueuedConnection, Q_ARG(int, 3));
+        ui->lbl_calibStatus->setText("步骤3激态：等待样坯在双目交界处通过以解算轴距...");
+    }
+}
+
+// 🌟 核心回调：接收从金牌生产线层层大网过滤后反馈回来的“绝对无损大身真理均值”
+void DlgCalibration::onPlateCalibFinished(double trueAvg) {
+    double realW = ui->lineEdit_calibWidth->text().toDouble();
+    MyApplication *pApp = (MyApplication *) qApp;
+
+    if (m_currentStep == 1) {
+        // trueAvg 此时实际上是主相机的“像素跨度均值”
+        double newCm = realW / trueAvg;
+        QMetaObject::invokeMethod(pApp->m_workstationList[0]->m_pWorkerImageProcess, "slot_hotUpdateMasterPixel", Qt::QueuedConnection, Q_ARG(double, newCm));
+        ui->lbl_masterPixelRes->setText(QString("%1 mm/px").arg(QString::number(newCm, 'f', 6)));
+        QMessageBox::information(this, "成功", "主相机当量标定成功并落盘！");
+    }
+    else if (m_currentStep == 2) {
+        // trueAvg 此时实际上是副相机的“像素跨度均值”
+        double newCs = realW / trueAvg;
+        QMetaObject::invokeMethod(pApp->m_workstationList[0]->m_pWorkerImageProcess, "slot_hotUpdateSlavePixel", Qt::QueuedConnection, Q_ARG(double, newCs));
+        ui->lbl_slavePixelRes->setText(QString("%1 mm/px").arg(QString::number(newCs, 'f', 6)));
+        QMessageBox::information(this, "成功", "副相机当量标定成功并落盘！");
+    }
+    else if (m_currentStep == 3) {
+        // trueAvg 此时直接就是双目物理轴距偏移量的精细均值！
+        QMetaObject::invokeMethod(pApp->m_workstationList[0]->m_pWorkerImageProcess, "slot_hotUpdateBaseline", Qt::QueuedConnection, Q_ARG(double, trueAvg));
+    }
+
+    // 收尾工作：解除欺骗，恢复生产状态机
+    m_currentStep = 0;
+    QMetaObject::invokeMethod(pApp->m_workstationList[0]->m_pWorkerImageProcess, "slot_setCalibMode", Qt::QueuedConnection, Q_ARG(int, 0));
+    ui->lbl_calibStatus->setText("当前状态：正常测量生产模式");
+}
+
+void DlgCalibration::slot_onBaselineCalibrated(double value) {
+    ui->lbl_baselineRes->setText(QString("双目重叠轴距: %1 mm").arg(QString::number(value, 'f', 2)));
+    QMessageBox::information(this, "大功告成", QString("🎉 双目轴距 [%1 mm] 对齐成功已落盘！").arg(QString::number(value, 'f', 2)));
+}
+// ... 下方的 finishPass、按钮响应等完全不变 ...
+
 void DlgCalibration::finishPass() {
     double trueW = ui->lineEdit_calibWidth->text().toDouble();
     if(trueW <= 0) trueW = 1500.0;
-
-    // 🌟 动态获取单视场金标准：向全局唯一的相机驱动索取横向物理尺寸
     MyApplication *pApp = (MyApplication *) qApp;
-    double mmPerPixel = 0.09473; // 安全兜底防呆值
+    double mmPerPixel = 0.09473;
     if (pApp && !pApp->m_workstationList.isEmpty() && pApp->m_workstationList[0]->m_pWorkerCamera) {
         mmPerPixel = pApp->m_workstationList[0]->m_pWorkerCamera->m_mmPerPixelX;
     }
-
-    // 将动态获取到的 mmPerPixel 代入最小二乘和虚宽剥离公式中
     bool success = m_calibManager.finishCurrentPass(trueW, mmPerPixel);
     if (success) {
-        ui->lbl_calibStatus->setText(QString("已录入第 %1 趟有效正向数据 (当前总点数: %2)")
-                                     .arg(m_calibManager.getPassesCount())
-                                     .arg(m_calibManager.getGlobalPointsCount()));
-        ui->btn_executeCalib->setEnabled(true);
-        ui->btn_removeLastPass->setEnabled(true);
+        ui->lbl_calibStatus->setText(QString("已录入第 %1 趟有效正向数据 (当前总点数: %2)").arg(m_calibManager.getPassesCount()).arg(m_calibManager.getGlobalPointsCount()));
+        ui->btn_executeCalib->setEnabled(true); ui->btn_removeLastPass->setEnabled(true);
     }
 }
 
 void DlgCalibration::on_btn_startCalib_clicked() {
-    m_isInCalibrationMode = true;
-    m_isCalibPaused = false;
-    m_calibManager.resetGlobalCalibration();
-
-    ui->btn_startCalib->setEnabled(false);
-    ui->btn_pauseCalib->setEnabled(true);
-    ui->btn_pauseCalib->setText("暂停");
-    ui->btn_executeCalib->setEnabled(false);
-    ui->btn_removeLastPass->setEnabled(false);
-
+    m_isInCalibrationMode = true; m_isCalibPaused = false; m_calibManager.resetGlobalCalibration();
+    ui->btn_startCalib->setEnabled(false); ui->btn_pauseCalib->setEnabled(true); ui->btn_pauseCalib->setText("暂停");
+    ui->btn_executeCalib->setEnabled(false); ui->btn_removeLastPass->setEnabled(false);
     ui->lbl_calibStatus->setStyleSheet("font-weight: bold; color: #ffaa00;");
-    ui->lbl_calibStatus->setText("自标定激活：请让样坯向前通过相机（推荐左中右走3遍）...");
+    ui->lbl_calibStatus->setText("自标定激活：请让样坯向前通过相机（推荐左中右走3慢）...");
 }
 
 void DlgCalibration::on_btn_pauseCalib_clicked() {
     if (!m_isInCalibrationMode) return;
     m_isCalibPaused = !m_isCalibPaused;
     if (m_isCalibPaused) {
-        ui->btn_pauseCalib->setText("恢复");
-        ui->lbl_calibStatus->setStyleSheet("font-weight: bold; color: gray;");
+        ui->btn_pauseCalib->setText("恢复"); ui->lbl_calibStatus->setStyleSheet("font-weight: bold; color: gray;");
         ui->lbl_calibStatus->setText("已挂起接收！请让样坯反向退回起点，退出后点击恢复。");
     } else {
-        ui->btn_pauseCalib->setText("暂停");
-        ui->lbl_calibStatus->setStyleSheet("font-weight: bold; color: #ffaa00;");
+        ui->btn_pauseCalib->setText("暂停"); ui->lbl_calibStatus->setStyleSheet("font-weight: bold; color: #ffaa00;");
         ui->lbl_calibStatus->setText(QString("已恢复接收！当前就绪。已累计录入 %1 趟数据。").arg(m_calibManager.getPassesCount()));
     }
 }
@@ -105,71 +151,33 @@ void DlgCalibration::on_btn_removeLastPass_clicked() {
         int currentPasses = m_calibManager.getPassesCount();
         ui->lbl_calibStatus->setStyleSheet("font-weight: bold; color: #ff5500;");
         ui->lbl_calibStatus->setText(QString("已成功撤销最后一趟异常数据！当前池内剩余有效趟数: %1").arg(currentPasses));
-        if (currentPasses == 0) {
-            ui->btn_executeCalib->setEnabled(false);
-            ui->btn_removeLastPass->setEnabled(false);
-        }
+        if (currentPasses == 0) { ui->btn_executeCalib->setEnabled(false); ui->btn_removeLastPass->setEnabled(false); }
     }
 }
 
-// ==================== [ dlgcalibration.cpp ] ====================
 void DlgCalibration::on_btn_executeCalib_clicked() {
-    // 🌟 路径与名称 100% 刚性对齐
     QString appDir = QCoreApplication::applicationDirPath();
     QString mPath = appDir + "/Camera_Master_1DLUT.hdict";
     QString sPath = appDir + "/Camera_Slave_1DLUT.hdict";
-
-    // 动态获取相机标定常数，保证重写后的 Coef_c 线性项与镜头绝对 1:1 物理对齐
     MyApplication *pApp = (MyApplication *) qApp;
     double mmPerPixel = 0.09473;
     if (pApp && !pApp->m_workstationList.isEmpty() && pApp->m_workstationList[0]->m_pWorkerCamera) {
         mmPerPixel = pApp->m_workstationList[0]->m_pWorkerCamera->m_mmPerPixelX;
     }
-
     bool success = m_calibManager.finalizeGlobalCalibration(mmPerPixel, mPath, sPath);
     if (success) {
         ui->lbl_calibStatus->setStyleSheet("font-weight: bold; color: green;");
-        ui->lbl_calibStatus->setText(QString("🎉 自标定大获成功！融合 %1 趟点云，参数已重写存盘。").arg(m_calibManager.getPassesCount()));
-
-        // =======================================================================
-        // 🌟【核心解算闭环】：通过神经总线跨线程安全通知算法工作线程热装载新字典。
-        // 使用 Qt::QueuedConnection 投递，算法线程会在处理完当前图像行的瞬间顺畅重读，
-        // 绝不影响拉流，且立刻生效！
-        // =======================================================================
+        ui->lbl_calibStatus->setText(QString("🎉 自标定大获成功！融合 %1 趟点云，参数已重写。").arg(m_calibManager.getPassesCount()));
         if (pApp && !pApp->m_workstationList.isEmpty() && pApp->m_workstationList[0]->m_pWorkerImageProcess) {
-            QMetaObject::invokeMethod(pApp->m_workstationList[0]->m_pWorkerImageProcess,
-                                      "slot_reloadCalibration",
-                                      Qt::QueuedConnection);
+            QMetaObject::invokeMethod(pApp->m_workstationList[0]->m_pWorkerImageProcess, "slot_reloadCalibration", Qt::QueuedConnection);
         }
-
     } else {
-        ui->lbl_calibStatus->setStyleSheet("font-weight: bold; color: red;");
-        ui->lbl_calibStatus->setText("标定解算失败，请检查物理磁盘文件读写权限。");
+        ui->lbl_calibStatus->setStyleSheet("font-weight: bold; color: red;"); ui->lbl_calibStatus->setText("标定解算失败，请检查文件权限。");
     }
-    m_isInCalibrationMode = false;
-    ui->btn_startCalib->setEnabled(true);
-    ui->btn_pauseCalib->setEnabled(false);
-    ui->btn_executeCalib->setEnabled(false);
-    ui->btn_removeLastPass->setEnabled(false);
+    m_isInCalibrationMode = false; ui->btn_startCalib->setEnabled(true); ui->btn_pauseCalib->setEnabled(false);
+    ui->btn_executeCalib->setEnabled(false); ui->btn_removeLastPass->setEnabled(false);
 }
 
 void DlgCalibration::on_btn_cancelCalib_clicked() {
-    m_isInCalibrationMode = false;
-    m_isCalibPaused = false;
-    m_calibManager.resetGlobalCalibration();
-    this->close();
-}
-
-void DlgCalibration::slot_speedEditingFinished() {
-    // 1. 获取工人填写的 mm/s 速度值（例如输入 380）
-    double speed_mm_s = ui->lineEdit->text().toDouble();
-    if (speed_mm_s <= 0.0) return;
-
-    // 2. 自动换算为相机底层需要的 m/s 单位（380 mm/s -> 0.38 m/s）
-    double speed_m_s = speed_mm_s / 1000.0;
-
-    // 3. 将换算后的标准速度跨窗体发射出去
-    emit sig_speedChanged(speed_m_s);
-
-    ui->lbl_calibStatus->setText(QString("辊道速度已更新为: %1 mm/s，正在动态调整相机物理行频...").arg(speed_mm_s));
+    m_isInCalibrationMode = false; m_isCalibPaused = false; m_calibManager.resetGlobalCalibration(); this->close();
 }

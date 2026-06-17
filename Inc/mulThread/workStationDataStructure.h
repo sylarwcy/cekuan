@@ -97,12 +97,22 @@ struct WidthResult {
     QVector<double> contourColsLeft;
     QVector<double> contourColsRight;
 
+    // 🌟 新增：自动标定专用——主副相机各自未拼接前的原始纯净图像边界像素列号(u坐标)
+    double calibMasterLeftU{-1.0};
+    double calibMasterRightU{-1.0};
+    double calibSlaveLeftU{-1.0};
+    double calibSlaveRightU{-1.0};
+
     HalconCpp::HObject dispImage;
+    HalconCpp::HObject calibRawMasterChunk;
+    HalconCpp::HObject calibRawSlaveChunk;
 
     WidthResult() : frameID(0), isValid(false), widthValue(0.0), yawAngle(0.0),
                     renderLeftX(-1), renderRightX(-1), renderY(-1),
                     renderBoundLeftX(-1), renderBoundRightX(-1) {
         HalconCpp::GenEmptyObj(&dispImage);
+        HalconCpp::GenEmptyObj(&calibRawMasterChunk);
+        HalconCpp::GenEmptyObj(&calibRawSlaveChunk);
     }
 };
 

@@ -40,7 +40,7 @@ void WorkerImageProcess::imgProcessMeasure(const DualCameraChunk &chunk) {
     if (m_isProcessing) return;
     m_isProcessing = true;
 
-    if (m_algo && chunk.hasLeft && chunk.hasRight) {
+    if (m_algo && (chunk.hasLeft || chunk.hasRight)) {
         WidthResult res = m_algo->processFrame(chunk.imgLeft, chunk.imgRight);
         res.frameID = chunk.frameID;
 
@@ -112,8 +112,24 @@ void WorkerImageProcess::imgProcessMeasure(const DualCameraChunk &chunk) {
                 }
             }
         }
-        // =========================================================
 
+        // =========================================================
+        // 📸 纯调试功能：保存每一帧进入算法计算的单帧拼接原图
+        // =========================================================
+        if (res.dispImage.IsInitialized()) {
+            try {
+                // 按小时建文件夹，防止一个文件夹里图片几万张卡死 Windows
+                QString dirPath = QCoreApplication::applicationDirPath() + "/DebugImages/" + QDateTime::currentDateTime().toString("yyyy-MM-dd_HH");
+                QDir().mkpath(dirPath);
+
+                // 文件名包含帧号，方便你顺着时序看
+                QString fileName = QString("%1/Frame_%2_%3.jpg")
+                                   .arg(dirPath)
+                                   .arg(QDateTime::currentDateTime().toString("mm_ss_zzz"))
+                                   .arg(res.frameID);
+                HalconCpp::WriteImage(res.dispImage, "jpeg", 0, fileName.toLocal8Bit().constData());
+            } catch (...) {}
+        }
         emit sigMeasureReady(res);
     }
     m_isProcessing = false;
@@ -133,5 +149,25 @@ void WorkerImageProcess::slot_reloadCalibration() {
         } else {
             qCritical() << "[HOT-RELOAD] 后台自适应重载失败，请检查配置文件是否被独占或锁死。";
         }
+    }
+}
+
+void WorkerImageProcess::slot_setCalibMode(int mode) {
+    if (m_algo) m_algo->setCalibMode(mode);
+}
+
+void WorkerImageProcess::slot_hotUpdateMasterPixel(double newC) {
+    if (m_algo) { m_algo->updatePixelResolution(true, newC); m_algo->saveCurrentDictsToDisk(); }
+}
+
+void WorkerImageProcess::slot_hotUpdateSlavePixel(double newC) {
+    if (m_algo) { m_algo->updatePixelResolution(false, newC); m_algo->saveCurrentDictsToDisk(); }
+}
+
+void WorkerImageProcess::slot_hotUpdateBaseline(double newOffset) {
+    if (m_algo) {
+        m_algo->updateBaselineOffset(newOffset);
+        m_algo->saveCurrentDictsToDisk();
+        emit sig_baselineCalibrated(newOffset);
     }
 }
