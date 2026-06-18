@@ -57,9 +57,6 @@ bool DualLineScanWidthImgPro::initAlgorithm(const QString &masterDictPath, const
     return (masterOk && slaveOk);
 }
 
-// =======================================================================
-// 模块化抽取：图像纵向无损插值对齐算法
-// =======================================================================
 void DualLineScanWidthImgPro::alignImages(const HalconCpp::HObject& imgLeft, const HalconCpp::HObject& imgRight, int DiffY, int frameHeight, double wM, double wS, HalconCpp::HObject& imgLeftAligned, HalconCpp::HObject& imgRightAligned) {
     int absDiffY = std::abs(DiffY);
     imgLeftAligned = imgLeft;
@@ -90,54 +87,58 @@ void DualLineScanWidthImgPro::alignImages(const HalconCpp::HObject& imgLeft, con
 }
 
 // =======================================================================
-// 模块化抽取：纯净二值化游程编码边缘提取
+// 🌟 降维打击：基于边缘梯度极性的一维测量（1D Caliper）
 // =======================================================================
 void DualLineScanWidthImgPro::extractEdges(const HalconCpp::HObject& img, int frameHeight, QVector<double>& outMinX, QVector<double>& outMaxX) {
     if (!img.IsInitialized()) return;
     try {
         HalconCpp::HTuple w_img, h_img;
         HalconCpp::GetImageSize(img, &w_img, &h_img);
-        double maxAllowedWidth = w_img[0].D() * 0.95;
+        int width = w_img[0].I();
+        int height = h_img[0].I();
 
-        HalconCpp::HObject regDark, regFillUp, conn, sel;
-        HalconCpp::HTuple th, num;
-        HalconCpp::BinaryThreshold(img, &regDark, "max_separability", "dark", &th);
-        HalconCpp::FillUp(regDark, &regFillUp);
-        HalconCpp::Connection(regFillUp, &conn);
-        HalconCpp::SelectShapeStd(conn, &sel, "max_area", 0.0);
-        HalconCpp::CountObj(sel, &num);
+        HalconCpp::HTuple measureHandle;
 
-        if (num.I() > 0) {
-            HalconCpp::HTuple area, row, col, meanGray, devGray;
-            HalconCpp::AreaCenter(sel, &area, &row, &col);
-            HalconCpp::Intensity(sel, img, &meanGray, &devGray);
+        // 🌟 修复编译错误：Halcon 的带旋转角的矩形永远以 Rectangle2 命名！
+        // 创建一个长度等于图像宽、高度仅为 1 像素的卡尺，中心初始在第 0 行
+        HalconCpp::GenMeasureRectangle2(0.5, width / 2.0, 0, width / 2.0, 0.5, width, height, "nearest_neighbor", &measureHandle);
 
-            if (area.D() > 200.0 && meanGray.D() < 120.0) {
-                HalconCpp::HTuple r1, c1, r2, c2;
-                HalconCpp::SmallestRectangle1(sel, &r1, &c1, &r2, &c2);
-                double wPx = c2.D() - c1.D();
+        for (int r = 0; r < height; ++r) {
+            // 将卡尺平移到当前行扫描
+            HalconCpp::TranslateMeasure(measureHandle, r + 0.5, width / 2.0);
 
-                if (wPx > 10.0 && wPx < maxAllowedWidth) {
-                    HalconCpp::HTuple runRows, runColBegins, runColEnds;
-                    HalconCpp::GetRegionRuns(sel, &runRows, &runColBegins, &runColEnds);
-                    for (int i = 0; i < runRows.Length(); ++i) {
-                        int r = runRows[i].I();
-                        double c_start = runColBegins[i].D();
-                        double c_end = runColEnds[i].D();
-                        if (r >= 0 && r < frameHeight) {
-                            if (outMinX[r] < 0 || c_start < outMinX[r]) outMinX[r] = c_start;
-                            if (outMaxX[r] < 0 || c_end > outMaxX[r]) outMaxX[r] = c_end;
-                        }
-                    }
+            HalconCpp::HTuple rowEdge, columnEdge, amplitude, distance;
+
+            // Sigma=2.0 (平滑毛刺), Threshold=30 (忽略微弱渐变), "all" (抓取所有超过阈值的跳变边缘)
+            HalconCpp::MeasurePos(img, measureHandle, 2.0, 30.0, "all", "all", &rowEdge, &columnEdge, &amplitude, &distance);
+
+            double firstPos = -1.0;
+            double lastNeg = -1.0;
+
+            // 遍历该行找到的所有亚像素边缘
+            for (int i = 0; i < columnEdge.Length(); ++i) {
+                if (amplitude[i].D() > 0) {
+                    // 🌟 正梯度 (暗 -> 亮)：说明这是钢板的左边缘！
+                    if (firstPos < 0) firstPos = columnEdge[i].D(); // 我们只信任最左侧出现的第一个钢板正边缘
+                } else {
+                    // 🌟 负梯度 (亮 -> 暗)：说明这是钢板的右边缘！
+                    lastNeg = columnEdge[i].D(); // 不断更新，最后留下的一定是最右侧的负边缘
                 }
             }
+
+            if (firstPos >= 0) {
+                if (outMinX[r] < 0 || firstPos < outMinX[r]) outMinX[r] = firstPos;
+            }
+            if (lastNeg >= 0) {
+                if (outMaxX[r] < 0 || lastNeg > outMaxX[r]) outMaxX[r] = lastNeg;
+            }
         }
+
+        // 必须释放卡尺句柄防内存泄漏
+        HalconCpp::CloseMeasure(measureHandle);
     } catch (...) {}
 }
 
-// =======================================================================
-// 四大运行状态机剥离实现
-// =======================================================================
 void DualLineScanWidthImgPro::processMode1(const HalconCpp::HObject& imgLeftAligned, int frameHeight, int mStartX, int mWidth, WidthResult& result, QVector<double>& vecWidths) {
     HalconCpp::CropPart(imgLeftAligned, &result.dispImage, 0, mStartX, mWidth, frameHeight);
     QVector<double> minX(frameHeight, -1.0), maxX(frameHeight, -1.0);
@@ -370,13 +371,16 @@ WidthResult DualLineScanWidthImgPro::processFrame(const HalconCpp::HObject &imgL
         HalconCpp::HObject imgLeftAligned = imgLeft, imgRightAligned = imgRight;
         alignImages(imgLeft, imgRight, -8, frameHeight, wM, wS, imgLeftAligned, imgRightAligned);
 
-        int mStartX = 700;
-        int mEndX = wM - 150;
+        // =========================================================
+        // 🌟 物理死区拦截：强制对齐用户指定的现场边界参数！
+        // =========================================================
+        int mStartX = 270;
+        int mEndX = wM;
         if (mEndX > (int) wM) mEndX = (int) wM;
         int mWidth = mEndX - mStartX;
 
-        int sSafeStartX = 150;
-        int sSafeEndX = std::min(2900, (int)wS);
+        int sSafeStartX = 0;
+        int sSafeEndX = std::min(3520, (int)wS);
         int sSafeWidth = sSafeEndX - sSafeStartX;
 
         QVector<double> vecWidths;
