@@ -276,25 +276,60 @@ QVector<double> frmView1::updatePostProcessCurve(int multiplier) {
     return whiteY;
 }
 
+// =======================================================================
+// 🌟 获取软件 Y 轴拉伸补偿比例的核心函数
+// 公式: ScaleY = 理想行频 / 实际被锁死后的行频
+// =======================================================================
+double frmView1::getScaleY() {
+    MyApplication *pApp = (MyApplication *) qApp;
+    if (pApp && !pApp->m_workstationList.isEmpty() && pApp->m_workstationList[0]->m_pWorkerCamera) {
+        double speed = pApp->m_workstationList[0]->m_pWorkerCamera->m_currentSpeed_mm_s;
+        double rate = pApp->m_workstationList[0]->m_pWorkerCamera->m_lineRate;
+        double px = pApp->m_workstationList[0]->m_pWorkerCamera->m_mmPerPixelX;
+
+        if (rate > 0 && px > 0) {
+            double idealRate = speed / px;
+            double scale = idealRate / rate;
+            return scale >= 1.0 ? scale : 1.0; // 如果不需要拉伸则保持1.0
+        }
+    }
+    return 1.0;
+}
+
 void frmView1::resetFusion() { m_hFusedImage.Clear(); m_isFirstFrame = true; }
 
 void frmView1::addFrameToFusion(HalconCpp::HObject newFrame) {
     try {
-        if (m_isFirstFrame) { m_hFusedImage = newFrame; m_isFirstFrame = false; } 
+        if (m_isFirstFrame) { m_hFusedImage = newFrame; m_isFirstFrame = false; }
         else { HalconCpp::HObject temp; HalconCpp::ConcatObj(m_hFusedImage, newFrame, &temp); m_hFusedImage = temp; }
 
-        HalconCpp::HObject fusedImage, imageRotated;
+        // 🌟 应用软件拉伸恢复 1:1 比例
+        double scaleY = getScaleY();
+        HalconCpp::HObject fusedImage, fusedImageScaled, imageRotated;
         HalconCpp::TileImages(m_hFusedImage, &fusedImage, 1, "vertical");
-        HalconCpp::RotateImage(fusedImage, &imageRotated, 90, "constant");
+
+        // Y轴物理补偿拉伸
+        HalconCpp::ZoomImageFactor(fusedImage, &fusedImageScaled, 1.0, scaleY, "constant");
+        // 拉伸完毕后再执行旋转，图像比例将绝对完美
+        HalconCpp::RotateImage(fusedImageScaled, &imageRotated, 90, "constant");
 
         displayImageProportional(imageRotated, winHandle_fusion, ui->gView_fusion->width(), ui->gView_fusion->height(), "white", true);
         displayImageProportional(imageRotated, winHandle_lunkuo, ui->gView_lunkuo->width(), ui->gView_lunkuo->height(), "white", false);
 
         if (m_globalContourRows.size() > 0) {
-            HTuple fW, fH; HalconCpp::GetImageSize(fusedImage, &fW, &fH);
-            int origWidth = fW[0].I(); HTuple rotRows, rotCols;
-            for (int i = 0; i < m_globalContourRows.size(); ++i) { rotRows.Append(origWidth - 1 - m_globalContourColsL[i]); rotCols.Append(m_globalContourRows[i]); }
-            for (int i = m_globalContourRows.size() - 1; i >= 0; --i) { rotRows.Append(origWidth - 1 - m_globalContourColsR[i]); rotCols.Append(m_globalContourRows[i]); }
+            HTuple fW, fH; HalconCpp::GetImageSize(fusedImage, &fW, &fH); // 取原始宽度
+            int origWidth = fW[0].I();
+            HTuple rotRows, rotCols;
+
+            for (int i = 0; i < m_globalContourRows.size(); ++i) {
+                rotRows.Append(origWidth - 1 - m_globalContourColsL[i]);
+                // 🌟 红线的 Y 坐标同步进行等比例拉长
+                rotCols.Append(m_globalContourRows[i] * scaleY);
+            }
+            for (int i = m_globalContourRows.size() - 1; i >= 0; --i) {
+                rotRows.Append(origWidth - 1 - m_globalContourColsR[i]);
+                rotCols.Append(m_globalContourRows[i] * scaleY);
+            }
             if (rotRows.Length() > 0) { rotRows.Append(rotRows[0]); rotCols.Append(rotCols[0]); }
 
             HalconCpp::HObject closedPlateXld; HalconCpp::GenContourPolygonXld(&closedPlateXld, rotRows, rotCols);
@@ -359,10 +394,6 @@ void frmView1::on_btn_openCalib_clicked() {
     m_pCalibDlg->show(); m_pCalibDlg->raise(); m_pCalibDlg->activateWindow();
 }
 
-// =======================================================================
-// 模块化重构区：分离原本臃肿的 onMeasureReady 上帝函数
-// =======================================================================
-
 void frmView1::displayImageProportional(HalconCpp::HObject img, HalconCpp::HTuple winHandle, int winW, int winH, QString bgColor, bool showImg) {
     if (!img.IsInitialized() || winW <= 0 || winH <= 0) return;
     try {
@@ -398,12 +429,15 @@ void frmView1::calculatePlateStats(double &trueAvg, double &trueMax, double &tru
         return;
     }
 
+    double scaleY = getScaleY();
     double sum_y = 0, sum_x = 0, sum_y2 = 0, sum_xy = 0;
     for (int i = 0; i < n; ++i) {
-        double y = m_globalContourRows[i];
+        // 🌟 核心：计算偏航角时，必须将压扁的 Y 坐标拉伸回真实的 1:1 坐标体系！
+        double y = m_globalContourRows[i] * scaleY;
         double x = (m_globalContourColsL[i] + m_globalContourColsR[i]) / 2.0;
         sum_y += y; sum_x += x; sum_y2 += y * y; sum_xy += x * y;
     }
+
     double denom = n * sum_y2 - sum_y * sum_y;
     double k = (std::abs(denom) > 1e-6) ? (n * sum_xy - sum_x * sum_y) / denom : 0.0;
     cosTheta = 1.0 / std::sqrt(1.0 + k * k);
@@ -472,7 +506,8 @@ void frmView1::calculatePlateStats(double &trueAvg, double &trueMax, double &tru
 void frmView1::renderAndSavePlateImages(int globalMinLeft, int globalMaxRight, double trueAvg, double trueMax, double trueMin, double totalLength, int currentStep) {
     if (!m_hFusedImage.IsInitialized() || globalMinLeft == 99999 || globalMaxRight == -1) return;
     try {
-        HalconCpp::HObject fFull, croppedFused, imageRotated;
+        double scaleY = getScaleY();
+        HalconCpp::HObject fFull, croppedFused, croppedFusedScaled, imageRotated;
         HalconCpp::TileImages(m_hFusedImage, &fFull, 1, "vertical");
 
         HalconCpp::HTuple fW, fH;
@@ -495,8 +530,14 @@ void frmView1::renderAndSavePlateImages(int globalMinLeft, int globalMaxRight, d
         int cropH = bottomY - topY + 1;
 
         if (cropW > 0 && cropH > 0) {
+            // 🌟 1. 剪裁出压扁的大图
             HalconCpp::CropPart(fFull, &croppedFused, topY, leftX, cropW, cropH);
-            HalconCpp::RotateImage(croppedFused, &imageRotated, 90, "constant");
+
+            // 🌟 2. 纵向补齐拉伸，恢复 1:1！
+            HalconCpp::ZoomImageFactor(croppedFused, &croppedFusedScaled, 1.0, scaleY, "constant");
+
+            // 🌟 3. 最后再向左躺倒旋转，符合视觉习惯
+            HalconCpp::RotateImage(croppedFusedScaled, &imageRotated, 90, "constant");
 
             displayImageProportional(imageRotated, winHandle_fusion, ui->gView_fusion->width(), ui->gView_fusion->height(), "white", true);
             displayImageProportional(imageRotated, winHandle_lunkuo, ui->gView_lunkuo->width(), ui->gView_lunkuo->height(), "white", false);
@@ -506,16 +547,16 @@ void frmView1::renderAndSavePlateImages(int globalMinLeft, int globalMaxRight, d
 
             if (m_globalContourRows.size() > 0) {
                 HalconCpp::HTuple origWidth, dummyH;
-                HalconCpp::GetImageSize(croppedFused, &origWidth, &dummyH);
+                HalconCpp::GetImageSize(croppedFused, &origWidth, &dummyH); // 用缩放前宽度
                 HTuple rotRows, rotCols;
 
                 for (int i = 0; i < m_globalContourRows.size(); ++i) {
                     rotRows.Append(origWidth[0].I() - 1 - (m_globalContourColsL[i] - leftX));
-                    rotCols.Append(m_globalContourRows[i] - topY);
+                    rotCols.Append((m_globalContourRows[i] - topY) * scaleY); // 🌟 轮廓等比例补齐
                 }
                 for (int i = m_globalContourRows.size() - 1; i >= 0; --i) {
                     rotRows.Append(origWidth[0].I() - 1 - (m_globalContourColsR[i] - leftX));
-                    rotCols.Append(m_globalContourRows[i] - topY);
+                    rotCols.Append((m_globalContourRows[i] - topY) * scaleY); // 🌟 轮廓等比例补齐
                 }
                 if (rotRows.Length() > 0) {
                     rotRows.Append(rotRows[0]); rotCols.Append(rotCols[0]);
@@ -526,16 +567,20 @@ void frmView1::renderAndSavePlateImages(int globalMinLeft, int globalMaxRight, d
                 HalconCpp::SetLineWidth(winHandle_lunkuo, 4);
                 HalconCpp::SetColor(winHandle_lunkuo, "red");
                 HalconCpp::DispObj(localXld, winHandle_lunkuo);
-                HalconCpp::PaintXld(croppedFused, localXld, &ho_webContourImg, 255);
+
+                // 🌟 把轮廓画在补齐拉长的 1:1 图片上
+                HalconCpp::PaintXld(imageRotated, localXld, &ho_webContourImg, 255);
             } else {
-                ho_webContourImg = croppedFused;
+                ho_webContourImg = imageRotated;
             }
 
             try {
                 QString dirPath = QCoreApplication::applicationDirPath() + "/DebugImages/" + QDateTime::currentDateTime().toString("yyyy-MM-dd_HH");
                 QDir().mkpath(dirPath);
                 QString plateID = QDateTime::currentDateTime().toString("mm_ss_zzz");
-                if (croppedFused.IsInitialized()) HalconCpp::WriteImage(croppedFused, "jpeg", 0, QString("%1/FullPlate_Raw_%2.jpg").arg(dirPath).arg(plateID).toLocal8Bit().constData());
+
+                // 🌟 保存的图也是完美的 1:1
+                if (imageRotated.IsInitialized()) HalconCpp::WriteImage(imageRotated, "jpeg", 0, QString("%1/FullPlate_Raw_%2.jpg").arg(dirPath).arg(plateID).toLocal8Bit().constData());
                 if (ho_webContourImg.IsInitialized()) HalconCpp::WriteImage(ho_webContourImg, "jpeg", 0, QString("%1/FullPlate_Contour_%2.jpg").arg(dirPath).arg(plateID).toLocal8Bit().constData());
             } catch (...) {}
 
@@ -544,7 +589,8 @@ void frmView1::renderAndSavePlateImages(int globalMinLeft, int globalMaxRight, d
                 webReport.plateID = QDateTime::currentDateTime().toString("MMdd_HHmmss"); webReport.length = totalLength;
                 webReport.thickness = 0.00; webReport.targetWidth = 0.00;
                 webReport.avgWidth = trueAvg; webReport.maxWidth = trueMax; webReport.minWidth = trueMin;
-                webReport.ho_fusedImage = croppedFused; webReport.ho_contourImage = ho_webContourImg;
+                webReport.ho_fusedImage = imageRotated; // 发给服务器也是 1:1 图片
+                webReport.ho_contourImage = ho_webContourImg;
                 int multiplier = 3; if (m_pCalibDlg) { multiplier = m_pCalibDlg->getMultiplier(); }
                 webReport.curveValues = updatePostProcessCurve(multiplier);
                 emit sig_postPlateReportToWeb(webReport);
@@ -584,13 +630,15 @@ void frmView1::finishCurrentPlate() {
         double cosTheta = 1.0, sinTheta = 0.0;
         calculatePlateStats(trueAvg, trueMax, trueMin, cosTheta, sinTheta, currentStep);
 
+        // 🌟 长度计算补齐比例！
+        double scaleY = getScaleY();
         double projectedLength = 0.0;
         if (!m_globalContourRows.isEmpty()) {
             double minY = *std::min_element(m_globalContourRows.begin(), m_globalContourRows.end());
             double maxY = *std::max_element(m_globalContourRows.begin(), m_globalContourRows.end());
-            projectedLength = (maxY - minY + 1.0) * mmPerPixel;
+            projectedLength = (maxY - minY + 1.0) * scaleY * mmPerPixel;
         } else {
-            projectedLength = m_totalRows * mmPerPixel;
+            projectedLength = m_totalRows * scaleY * mmPerPixel;
         }
         double totalLength = (projectedLength - trueAvg * sinTheta) / cosTheta;
 

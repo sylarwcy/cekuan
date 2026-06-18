@@ -110,6 +110,8 @@ private slots:
     void onMultiplierChanged(int value);
 
 private:
+    double getScaleY();
+
     QVector<double> updatePostProcessCurve(int multiplier);
 
     // --- 算法重构抽离的核心私有控制流 ---
