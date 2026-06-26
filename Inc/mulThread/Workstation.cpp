@@ -153,6 +153,7 @@ void Workstation::SettingQThread() {
     connect(m_pThreadCamera, &QThread::finished, m_pWorkerCamera, &QObject::deleteLater);
     connect(m_pThreadImageProcess, &QThread::finished, m_pWorkerImageProcess, &QObject::deleteLater);
     connect(m_plcThread, &QThread::finished, m_pWorkerPlc, &QObject::deleteLater);
+    connect(m_pThreadImageProcess, &QThread::started, m_pWorkerImageProcess, &WorkerImageProcess::startOfflineTest);
     // ==============================================================
     // 6. 启动物理线程 (开启它们内部的事件循环 EventLoop)
     // ==============================================================

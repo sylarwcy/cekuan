@@ -2,6 +2,8 @@
 #pragma once
 #include <QObject>
 #include <QMutex>
+#include <QTimer>
+#include <QStringList>
 #include "ImgProGlobal.h"
 #include "WorkerCamera.h"
 #include "workStationDataStructure.h"
@@ -18,26 +20,29 @@ public:
     void setAlgorithm(DualLineScanWidthImgPro *algo) { m_algo = algo; }
 
 public slots:
-    // 接收双线阵相机的同步图像
     void imgProcessMeasure(const DualCameraChunk &chunk);
     void slot_reloadCalibration();
 
-    // 🌟 新增：由弹窗下发的状态机切换指令
     void slot_setCalibMode(int mode);
     void slot_hotUpdateMasterPixel(double newC);
     void slot_hotUpdateSlavePixel(double newC);
     void slot_hotUpdateBaseline(double newOffset);
 
-    signals:
-        // 处理完成，向 UI 或数据库发送结果
-        void sigMeasureReady(const WidthResult& result);
-    // 向 UI 发送处理后的图像用于显示
+    // 🌟 接收前端传来的实时动态钢板厚度
+    void slot_updateCurrentThickness(double t);
+    // 🌟 接收标定界面传来的 K 系数
+    void slot_updateThicknessK(double k, double baseT);
+
+    void startOfflineTest();
+
+private slots:
+    void onOfflineTimerTimeout();
+
+signals:
+    void sigMeasureReady(const WidthResult& result);
     void displayImageReady(const HalconCpp::HObject &dispImg);
     void sigProcessError(QString);
-    // 整块钢板走完后，发送汇总数据的信号
     void sigPlateFinished(double avgWidth, double totalLength, double maxWidth, double minWidth);
-
-    // 🌟 新增信号：在独立的图像子线程中将最终算好的双目重叠基线间距安全发射给 UI 弹窗
     void sig_baselineCalibrated(double value);
 
 private:
@@ -51,8 +56,19 @@ private:
     int m_validFrameCount = 0;
     int m_totalRows = 0;
     double m_mm_per_row = 1.0;
-
-    // --- 新增：用于记录最大和最小宽度 ---
     double m_maxWidth = 0.0;
     double m_minWidth = 99999.0;
+
+    // 🌟 厚度补偿物理引擎组件
+    double m_currentThickness{2.0};
+    double m_thicknessK{0.0};
+    double m_baseThickness{2.0};
+
+    // 离线播放组件
+    bool m_bIsOfflineMode{false};
+    int m_offlineIntervalMs{1500};
+    QTimer* m_pOfflineTimer{nullptr};
+    QStringList m_offlineFiles;
+    QString m_offlineDir;
+    int m_offlineIndex{0};
 };

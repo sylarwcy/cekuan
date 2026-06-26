@@ -134,11 +134,25 @@ void frmView1::initForm() {
     m_emptyFrameCount = 0;
 
     adjustFontSize(ui->lineEdit, 76, 40); adjustFontSize(ui->lineEdit_3, 35, 26);
-    adjustFontSize(ui->lineEdit_4, 35, 26); adjustFontSize(ui->lineEdit_8, 35, 26);
-    adjustFontSize(ui->lineEdit_9, 35, 26); adjustFontSize(ui->lineEdit_5, 76, 26);
-    ui->lineEdit_5->setText("0.0"); adjustFontSize(ui->lineEdit_6, 76, 26);
-    ui->lineEdit_6->setText("0.0"); adjustFontSize(ui->lineEdit_7, 76, 24); ui->lineEdit_7->setText("ABCD");
+    adjustFontSize(ui->lineEdit_4, 35, 26);
+    adjustFontSize(ui->lineEdit_8, 35, 26);
+    adjustFontSize(ui->lineEdit_9, 35, 26);
+    adjustFontSize(ui->lineEdit_5, 76, 26);ui->lineEdit_5->setText("0.0");
+    adjustFontSize(ui->lineEdit_6, 76, 26);ui->lineEdit_6->setReadOnly(false);ui->lineEdit_6->setText("2.0");
 
+    // 一旦你在这里输入了新厚度并敲下回车，底层透视滤镜瞬间改变焦距补偿：
+    connect(ui->lineEdit_6, &QLineEdit::editingFinished, this, [=](){
+        double currentT = ui->lineEdit_6->text().toDouble();
+        if(currentT <= 0) return;
+        MyApplication *pApp = (MyApplication *) qApp;
+        if (pApp && !pApp->m_workstationList.isEmpty() && pApp->m_workstationList[0]->m_pWorkerImageProcess) {
+            QMetaObject::invokeMethod(pApp->m_workstationList[0]->m_pWorkerImageProcess, "slot_updateCurrentThickness", Qt::QueuedConnection, Q_ARG(double, currentT));
+        }
+    });
+
+    adjustFontSize(ui->lineEdit_7, 76, 24); ui->lineEdit_7->setText("ABCD");
+
+    // [删除] 已移除之前动态生成的 QCheckBox 代码
     initCurveChart(); initHistoryUI();
 }
 
@@ -276,10 +290,6 @@ QVector<double> frmView1::updatePostProcessCurve(int multiplier) {
     return whiteY;
 }
 
-// =======================================================================
-// 🌟 获取软件 Y 轴拉伸补偿比例的核心函数
-// 公式: ScaleY = 理想行频 / 实际被锁死后的行频
-// =======================================================================
 double frmView1::getScaleY() {
     MyApplication *pApp = (MyApplication *) qApp;
     if (pApp && !pApp->m_workstationList.isEmpty() && pApp->m_workstationList[0]->m_pWorkerCamera) {
@@ -290,7 +300,7 @@ double frmView1::getScaleY() {
         if (rate > 0 && px > 0) {
             double idealRate = speed / px;
             double scale = idealRate / rate;
-            return scale >= 1.0 ? scale : 1.0; // 如果不需要拉伸则保持1.0
+            return scale >= 1.0 ? scale : 1.0;
         }
     }
     return 1.0;
@@ -303,27 +313,23 @@ void frmView1::addFrameToFusion(HalconCpp::HObject newFrame) {
         if (m_isFirstFrame) { m_hFusedImage = newFrame; m_isFirstFrame = false; }
         else { HalconCpp::HObject temp; HalconCpp::ConcatObj(m_hFusedImage, newFrame, &temp); m_hFusedImage = temp; }
 
-        // 🌟 应用软件拉伸恢复 1:1 比例
         double scaleY = getScaleY();
         HalconCpp::HObject fusedImage, fusedImageScaled, imageRotated;
         HalconCpp::TileImages(m_hFusedImage, &fusedImage, 1, "vertical");
 
-        // Y轴物理补偿拉伸
         HalconCpp::ZoomImageFactor(fusedImage, &fusedImageScaled, 1.0, scaleY, "constant");
-        // 拉伸完毕后再执行旋转，图像比例将绝对完美
         HalconCpp::RotateImage(fusedImageScaled, &imageRotated, 90, "constant");
 
         displayImageProportional(imageRotated, winHandle_fusion, ui->gView_fusion->width(), ui->gView_fusion->height(), "white", true);
         displayImageProportional(imageRotated, winHandle_lunkuo, ui->gView_lunkuo->width(), ui->gView_lunkuo->height(), "white", false);
 
         if (m_globalContourRows.size() > 0) {
-            HTuple fW, fH; HalconCpp::GetImageSize(fusedImage, &fW, &fH); // 取原始宽度
+            HTuple fW, fH; HalconCpp::GetImageSize(fusedImage, &fW, &fH);
             int origWidth = fW[0].I();
             HTuple rotRows, rotCols;
 
             for (int i = 0; i < m_globalContourRows.size(); ++i) {
                 rotRows.Append(origWidth - 1 - m_globalContourColsL[i]);
-                // 🌟 红线的 Y 坐标同步进行等比例拉长
                 rotCols.Append(m_globalContourRows[i] * scaleY);
             }
             for (int i = m_globalContourRows.size() - 1; i >= 0; --i) {
@@ -377,6 +383,8 @@ void frmView1::updateHistoryTable() {
     }
 }
 
+// 在 frmview1.cpp 的 on_btn_openCalib_clicked 中：
+
 void frmView1::on_btn_openCalib_clicked() {
     if (!m_pCalibDlg) {
         m_pCalibDlg = new DlgCalibration(this);
@@ -385,6 +393,9 @@ void frmView1::on_btn_openCalib_clicked() {
         if (pApp && !pApp->m_workstationList.isEmpty()) {
             if (pApp->m_workstationList[0]->m_pWorkerCamera) {
                 connect(m_pCalibDlg, &DlgCalibration::sig_speedChanged, pApp->m_workstationList[0]->m_pWorkerCamera, &WorkerCamera::onUpdateSpeedFromPLC, Qt::QueuedConnection);
+
+                // 🌟 新增：将 UI 的“曝光同步”信号，连接到相机的硬件管道控制！
+                connect(m_pCalibDlg, &DlgCalibration::sig_exposureTimeChanged, pApp->m_workstationList[0]->m_pWorkerCamera, &WorkerCamera::onUpdateExposureTime, Qt::QueuedConnection);
             }
             if (pApp->m_workstationList[0]->m_pWorkerImageProcess) {
                 connect(pApp->m_workstationList[0]->m_pWorkerImageProcess, &WorkerImageProcess::sig_baselineCalibrated, m_pCalibDlg, &DlgCalibration::slot_onBaselineCalibrated, Qt::QueuedConnection);
@@ -432,7 +443,6 @@ void frmView1::calculatePlateStats(double &trueAvg, double &trueMax, double &tru
     double scaleY = getScaleY();
     double sum_y = 0, sum_x = 0, sum_y2 = 0, sum_xy = 0;
     for (int i = 0; i < n; ++i) {
-        // 🌟 核心：计算偏航角时，必须将压扁的 Y 坐标拉伸回真实的 1:1 坐标体系！
         double y = m_globalContourRows[i] * scaleY;
         double x = (m_globalContourColsL[i] + m_globalContourColsR[i]) / 2.0;
         sum_y += y; sum_x += x; sum_y2 += y * y; sum_xy += x * y;
@@ -530,13 +540,8 @@ void frmView1::renderAndSavePlateImages(int globalMinLeft, int globalMaxRight, d
         int cropH = bottomY - topY + 1;
 
         if (cropW > 0 && cropH > 0) {
-            // 🌟 1. 剪裁出压扁的大图
             HalconCpp::CropPart(fFull, &croppedFused, topY, leftX, cropW, cropH);
-
-            // 🌟 2. 纵向补齐拉伸，恢复 1:1！
             HalconCpp::ZoomImageFactor(croppedFused, &croppedFusedScaled, 1.0, scaleY, "constant");
-
-            // 🌟 3. 最后再向左躺倒旋转，符合视觉习惯
             HalconCpp::RotateImage(croppedFusedScaled, &imageRotated, 90, "constant");
 
             displayImageProportional(imageRotated, winHandle_fusion, ui->gView_fusion->width(), ui->gView_fusion->height(), "white", true);
@@ -547,16 +552,16 @@ void frmView1::renderAndSavePlateImages(int globalMinLeft, int globalMaxRight, d
 
             if (m_globalContourRows.size() > 0) {
                 HalconCpp::HTuple origWidth, dummyH;
-                HalconCpp::GetImageSize(croppedFused, &origWidth, &dummyH); // 用缩放前宽度
+                HalconCpp::GetImageSize(croppedFused, &origWidth, &dummyH);
                 HTuple rotRows, rotCols;
 
                 for (int i = 0; i < m_globalContourRows.size(); ++i) {
                     rotRows.Append(origWidth[0].I() - 1 - (m_globalContourColsL[i] - leftX));
-                    rotCols.Append((m_globalContourRows[i] - topY) * scaleY); // 🌟 轮廓等比例补齐
+                    rotCols.Append((m_globalContourRows[i] - topY) * scaleY);
                 }
                 for (int i = m_globalContourRows.size() - 1; i >= 0; --i) {
                     rotRows.Append(origWidth[0].I() - 1 - (m_globalContourColsR[i] - leftX));
-                    rotCols.Append((m_globalContourRows[i] - topY) * scaleY); // 🌟 轮廓等比例补齐
+                    rotCols.Append((m_globalContourRows[i] - topY) * scaleY);
                 }
                 if (rotRows.Length() > 0) {
                     rotRows.Append(rotRows[0]); rotCols.Append(rotCols[0]);
@@ -568,7 +573,6 @@ void frmView1::renderAndSavePlateImages(int globalMinLeft, int globalMaxRight, d
                 HalconCpp::SetColor(winHandle_lunkuo, "red");
                 HalconCpp::DispObj(localXld, winHandle_lunkuo);
 
-                // 🌟 把轮廓画在补齐拉长的 1:1 图片上
                 HalconCpp::PaintXld(imageRotated, localXld, &ho_webContourImg, 255);
             } else {
                 ho_webContourImg = imageRotated;
@@ -579,7 +583,6 @@ void frmView1::renderAndSavePlateImages(int globalMinLeft, int globalMaxRight, d
                 QDir().mkpath(dirPath);
                 QString plateID = QDateTime::currentDateTime().toString("mm_ss_zzz");
 
-                // 🌟 保存的图也是完美的 1:1
                 if (imageRotated.IsInitialized()) HalconCpp::WriteImage(imageRotated, "jpeg", 0, QString("%1/FullPlate_Raw_%2.jpg").arg(dirPath).arg(plateID).toLocal8Bit().constData());
                 if (ho_webContourImg.IsInitialized()) HalconCpp::WriteImage(ho_webContourImg, "jpeg", 0, QString("%1/FullPlate_Contour_%2.jpg").arg(dirPath).arg(plateID).toLocal8Bit().constData());
             } catch (...) {}
@@ -589,7 +592,7 @@ void frmView1::renderAndSavePlateImages(int globalMinLeft, int globalMaxRight, d
                 webReport.plateID = QDateTime::currentDateTime().toString("MMdd_HHmmss"); webReport.length = totalLength;
                 webReport.thickness = 0.00; webReport.targetWidth = 0.00;
                 webReport.avgWidth = trueAvg; webReport.maxWidth = trueMax; webReport.minWidth = trueMin;
-                webReport.ho_fusedImage = imageRotated; // 发给服务器也是 1:1 图片
+                webReport.ho_fusedImage = imageRotated;
                 webReport.ho_contourImage = ho_webContourImg;
                 int multiplier = 3; if (m_pCalibDlg) { multiplier = m_pCalibDlg->getMultiplier(); }
                 webReport.curveValues = updatePostProcessCurve(multiplier);
@@ -630,7 +633,6 @@ void frmView1::finishCurrentPlate() {
         double cosTheta = 1.0, sinTheta = 0.0;
         calculatePlateStats(trueAvg, trueMax, trueMin, cosTheta, sinTheta, currentStep);
 
-        // 🌟 长度计算补齐比例！
         double scaleY = getScaleY();
         double projectedLength = 0.0;
         if (!m_globalContourRows.isEmpty()) {

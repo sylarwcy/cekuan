@@ -1,173 +1,147 @@
-﻿#include "WorkerImageProcess.h"
+﻿// ==================== [ WorkerImageProcess.cpp ] ====================
+#include "WorkerImageProcess.h"
 #include "appconfig.h"
 #include "HalconCpp.h"
 #include <QDir>
 #include <QDateTime>
+#include <QCoreApplication>
+#include <QDebug>
+#include "ini/settings.h"
+#include <QCollator>
+#include <algorithm>
 
 HalconCpp::HTuple winHandle_pro;
 WorkerImageProcess::WorkerImageProcess(QObject *parent) : QObject(parent), m_algo(nullptr) {
     qRegisterMetaType<WidthResult>("WidthResult");
+    m_pOfflineTimer = new QTimer(this);
+    connect(m_pOfflineTimer, &QTimer::timeout, this, &WorkerImageProcess::onOfflineTimerTimeout);
 }
 
-WorkerImageProcess::~WorkerImageProcess() {
-    if (m_algo) {
-        delete m_algo;
-    }
-}
+WorkerImageProcess::~WorkerImageProcess() { if (m_algo) delete m_algo; }
 
 void WorkerImageProcess::init(const WorkStation_DATA &paramData, double mmPerPixel) {
-    m_mm_per_row = mmPerPixel;
-    m_paramData = paramData; // 🌟 备份常数留给重载使用
+    m_mm_per_row = mmPerPixel; m_paramData = paramData;
+    if (!m_algo) m_algo = new DualLineScanWidthImgPro();
 
-    if (!m_algo) {
-        m_algo = new DualLineScanWidthImgPro();
-    }
-
-    // 🌟 刚性升级：抛弃死板的相对路径，全部对齐到程序所在的绝对根路径
     QString appDir = QCoreApplication::applicationDirPath();
-    QString masterDict = appDir + "/Camera_Master_1DLUT.hdict";
-    QString slaveDict  = appDir + "/Camera_Slave_1DLUT.hdict";
+    IniSettings setting_ini("setting.ini");
 
-    // 动态注入底层的多项式测宽拼接引擎中
-    if (m_algo->initAlgorithm(masterDict, slaveDict, mmPerPixel)) {
-        qInfo() << "[系统通知] Halcon 测宽算法启动成功，已加载绝对物理路径字典。";
-    } else {
-        qCritical() << "[系统严重警告] 未找到初始标定参数字典，系统将采用未对齐的默认线性模型运行！";
+    QString strUse1D = setting_ini.getValue("workstation1", "Use1DMeasure");
+    bool use1DMode = (!strUse1D.isEmpty() && (strUse1D.toLower() == "false" || strUse1D == "0")) ? false : true;
+    m_algo->setEdgeExtractionMode(use1DMode);
+
+    // 🌟 1. 初始化厚度补偿物理参数
+    m_thicknessK = setting_ini.getValue("Calibration", "ThicknessK").toDouble();
+    m_baseThickness = setting_ini.getValue("Calibration", "BaseThickness").toDouble();
+    if (m_baseThickness <= 0) m_baseThickness = 2.0;
+
+    QString strOfflineMode = setting_ini.getValue("workstation1", "OfflineMode");
+    m_bIsOfflineMode = (strOfflineMode.toLower() == "true" || strOfflineMode == "1");
+    m_offlineDir = setting_ini.getValue("workstation1", "OfflineTestPath");
+    m_offlineIntervalMs = setting_ini.getValue("workstation1", "OfflineIntervalMs").toInt();
+    if (m_offlineIntervalMs <= 0) m_offlineIntervalMs = 1000;
+
+    if (m_algo->initAlgorithm(appDir + "/Camera_Master_1DLUT.hdict", appDir + "/Camera_Slave_1DLUT.hdict", mmPerPixel)) {
+        qInfo() << "[系统通知] 算法大脑启动成功。厚度补偿引擎就绪(K=" << m_thicknessK << ")";
     }
+}
+
+// 🌟 厚度热更新通道
+void WorkerImageProcess::slot_updateCurrentThickness(double t) { m_currentThickness = t; }
+void WorkerImageProcess::slot_updateThicknessK(double k, double baseT) { m_thicknessK = k; m_baseThickness = baseT; }
+
+void WorkerImageProcess::startOfflineTest() {
+    if (!m_bIsOfflineMode || m_offlineDir.isEmpty()) return;
+    m_offlineIndex = 0; m_offlineFiles.clear(); QDir dir(m_offlineDir);
+    QStringList filters; filters << "*.jpg" << "*.bmp" << "*.png";
+    m_offlineFiles = dir.entryList(filters, QDir::Files);
+    if (m_offlineFiles.isEmpty()) return;
+
+    QCollator collator; collator.setNumericMode(true);
+    std::sort(m_offlineFiles.begin(), m_offlineFiles.end(), collator);
+    m_pOfflineTimer->start(m_offlineIntervalMs);
+}
+
+void WorkerImageProcess::onOfflineTimerTimeout() {
+    if (m_offlineIndex >= m_offlineFiles.size()) {
+        m_pOfflineTimer->stop(); WidthResult emptyRes; emptyRes.isValid = false;
+        if (m_isPlateActive) {
+            m_isPlateActive = false;
+            if (m_validFrameCount > 0) emit sigPlateFinished(m_sumWidth / m_validFrameCount, m_totalRows * m_mm_per_row, m_maxWidth, m_minWidth);
+        }
+        emit sigMeasureReady(emptyRes); return;
+    }
+
+    HalconCpp::HObject dispImage;
+    try { HalconCpp::ReadImage(&dispImage, (m_offlineDir + "/" + m_offlineFiles[m_offlineIndex]).toLocal8Bit().constData()); } catch (...) { m_offlineIndex++; return; }
+
+    if (m_algo) {
+        WidthResult res = m_algo->processOfflineDispImage(dispImage, m_offlineIndex);
+        res.frameID = m_offlineIndex;
+
+        if (res.isValid) {
+            // =========================================================
+            // 🌟 核心：极其优雅的厚度线性透视拦截器 (1 - K * Delta_T)
+            // =========================================================
+            double compFactor = 1.0 - m_thicknessK * (m_currentThickness - m_baseThickness);
+            res.widthValue *= compFactor;
+            for (int i = 0; i < res.rowWidths.size(); ++i) res.rowWidths[i] *= compFactor;
+
+            if (!m_isPlateActive) { m_isPlateActive = true; m_sumWidth = 0.0; m_validFrameCount = 0; m_totalRows = 0; m_maxWidth = 0.0; m_minWidth = 99999.0; }
+            m_sumWidth += res.widthValue; m_validFrameCount++;
+            if (res.widthValue > m_maxWidth) m_maxWidth = res.widthValue;
+            if (res.widthValue < m_minWidth) m_minWidth = res.widthValue;
+            HalconCpp::HTuple w, h; HalconCpp::GetImageSize(dispImage, &w, &h); m_totalRows += h[0].I();
+        } else {
+            if (m_isPlateActive) { m_isPlateActive = false; if (m_validFrameCount > 0) emit sigPlateFinished(m_sumWidth / m_validFrameCount, m_totalRows * m_mm_per_row, m_maxWidth, m_minWidth); }
+        }
+        emit sigMeasureReady(res);
+    }
+    m_offlineIndex++;
 }
 
 void WorkerImageProcess::imgProcessMeasure(const DualCameraChunk &chunk) {
-    if (m_isProcessing) return;
-    m_isProcessing = true;
+    if (m_isProcessing) return; m_isProcessing = true;
 
     if (m_algo && (chunk.hasLeft || chunk.hasRight)) {
-        WidthResult res = m_algo->processFrame(chunk.imgLeft, chunk.imgRight);
+        WidthResult res = m_algo->processFrame(chunk.imgLeft, chunk.imgRight, chunk.frameID);
         res.frameID = chunk.frameID;
 
-        // =========================================================
-        // 2. 基于单帧结果，进行整板长宽统计
-        // =========================================================
         if (res.isValid) {
-            // --- 状态 A：检测到有效边缘 (有钢板) ---
-            if (!m_isPlateActive) {
-                // 【入头】初始化所有统计变量
-                m_isPlateActive = true;
-                m_sumWidth = 0.0;
-                m_validFrameCount = 0;
-                m_totalRows = 0;
-                m_maxWidth = 0.0;        // 重置最大值
-                m_minWidth = 99999.0;    // 重置最小值
-            }
+            // =========================================================
+            // 🌟 在线生产时，同样接受实时厚度的透明拦截
+            // =========================================================
+            double compFactor = 1.0 - m_thicknessK * (m_currentThickness - m_baseThickness);
+            res.widthValue *= compFactor;
+            for (int i = 0; i < res.rowWidths.size(); ++i) res.rowWidths[i] *= compFactor;
 
-            // 累加数据
-            m_sumWidth += res.widthValue;
-            m_validFrameCount++;
+            if (!m_isPlateActive) { m_isPlateActive = true; m_sumWidth = 0.0; m_validFrameCount = 0; m_totalRows = 0; m_maxWidth = 0.0; m_minWidth = 99999.0; m_algo->resetBuffers(); }
+            m_sumWidth += res.widthValue; m_validFrameCount++;
+            if (res.widthValue > m_maxWidth) m_maxWidth = res.widthValue;
+            if (res.widthValue < m_minWidth) m_minWidth = res.widthValue;
 
-            // 【新增】：找最大值和最小值
-            if (res.widthValue > m_maxWidth) {
-                m_maxWidth = res.widthValue;
-            }
-            if (res.widthValue < m_minWidth) {
-                m_minWidth = res.widthValue;
-            }
-
-            // 累加长度 (行数)
-            HalconCpp::HTuple w, h;
-            HalconCpp::GetImageSize(chunk.imgLeft, &w, &h);
-            m_totalRows += h[0].I();
-
-            // 保存有钢板的、左右合并后的拼接原图
-            if (res.dispImage.IsInitialized()) {
+            HalconCpp::HTuple w, h; HalconCpp::GetImageSize(chunk.imgLeft, &w, &h); m_totalRows += h[0].I();
+            if (res.dispImage.IsInitialized() && !m_pOfflineTimer->isActive()) {
                 try {
-                    // 每天自动建一个文件夹，避免图片全堆在一起
-                    QString dateStr = QDateTime::currentDateTime().toString("yyyy-MM-dd");
-                    QString dirPath = QString("./SaveImages/%1").arg(dateStr);
-                    QDir dir;
-                    if (!dir.exists(dirPath)) {
-                        dir.mkpath(dirPath);
-                    }
-
-                    // 命名规则: Plate_时分秒_毫秒_帧号.jpg
-                    QString timeStr = QDateTime::currentDateTime().toString("HHmmss_zzz");
-                    QString fileName = QString("%1/Plate_%2_F%3.jpg").arg(dirPath).arg(timeStr).arg(res.frameID);
-
-                    // 保存图片 (这里使用 jpeg 格式节省空间，0 代表默认质量。如果想存无损可改 "tiff")
-                    HalconCpp::WriteImage(res.dispImage, "jpeg", 0, fileName.toLocal8Bit().constData());
-                } catch (HalconCpp::HException &e) {
-                    qWarning() << "[存图失败]:" << e.ErrorMessage().Text();
-                }
+                    QString dirPath = QCoreApplication::applicationDirPath() + "/DebugImages/" + QDateTime::currentDateTime().toString("yyyy-MM-dd_HH"); QDir().mkpath(dirPath);
+                    HalconCpp::WriteImage(res.dispImage, "jpeg", 0, QString("%1/Frame_Spliced_%2.jpg").arg(dirPath).arg(res.frameID).toLocal8Bit().constData());
+                } catch (...) {}
             }
         } else {
-            // --- 状态 B：没有检测到有效边缘 ---
-            if (m_isPlateActive) {
-                // 【出尾】计算最终结果
-                m_isPlateActive = false;
-
-                if (m_validFrameCount > 0) {
-                    double avgWidth = m_sumWidth / m_validFrameCount;
-                    double totalLength = m_totalRows * m_mm_per_row;
-
-                    // 【核心】将四个计算好的数据通过信号发送给 UI 主界面
-                    emit sigPlateFinished(avgWidth, totalLength, m_maxWidth, m_minWidth);
-                }
-            }
-        }
-
-        // =========================================================
-        // 📸 纯调试功能：保存每一帧进入算法计算的单帧拼接原图
-        // =========================================================
-        if (res.dispImage.IsInitialized()) {
-            try {
-                // 按小时建文件夹，防止一个文件夹里图片几万张卡死 Windows
-                QString dirPath = QCoreApplication::applicationDirPath() + "/DebugImages/" + QDateTime::currentDateTime().toString("yyyy-MM-dd_HH");
-                QDir().mkpath(dirPath);
-
-                // 文件名包含帧号，方便你顺着时序看
-                QString fileName = QString("%1/Frame_%2_%3.jpg")
-                                   .arg(dirPath)
-                                   .arg(QDateTime::currentDateTime().toString("mm_ss_zzz"))
-                                   .arg(res.frameID);
-                HalconCpp::WriteImage(res.dispImage, "jpeg", 0, fileName.toLocal8Bit().constData());
-            } catch (...) {}
+            if (m_isPlateActive) { m_isPlateActive = false; if (m_validFrameCount > 0) emit sigPlateFinished(m_sumWidth / m_validFrameCount, m_totalRows * m_mm_per_row, m_maxWidth, m_minWidth); }
         }
         emit sigMeasureReady(res);
     }
     m_isProcessing = false;
 }
+
 void WorkerImageProcess::slot_reloadCalibration() {
-    // 🌟 保持路径完全一致，实现热覆写
     QString appDir = QCoreApplication::applicationDirPath();
-    QString masterDict = appDir + "/Camera_Master_1DLUT.hdict";
-    QString slaveDict  = appDir + "/Camera_Slave_1DLUT.hdict";
-
-    if (m_algo) {
-        // 在算法运行时动态无感重新初始化系数矩阵
-        if (m_algo->initAlgorithm(masterDict, slaveDict, m_mm_per_row)) {
-            qInfo() << "======== [自适应热重载大获成功] ========";
-            qInfo() << "[HOT-RELOAD] 后台视觉算法大脑已成功热加载最新生成的自标定常数！";
-            qInfo() << "=======================================";
-        } else {
-            qCritical() << "[HOT-RELOAD] 后台自适应重载失败，请检查配置文件是否被独占或锁死。";
-        }
-    }
+    if (m_algo) m_algo->initAlgorithm(appDir + "/Camera_Master_1DLUT.hdict", appDir + "/Camera_Slave_1DLUT.hdict", m_mm_per_row);
 }
-
-void WorkerImageProcess::slot_setCalibMode(int mode) {
-    if (m_algo) m_algo->setCalibMode(mode);
-}
-
-void WorkerImageProcess::slot_hotUpdateMasterPixel(double newC) {
-    if (m_algo) { m_algo->updatePixelResolution(true, newC); m_algo->saveCurrentDictsToDisk(); }
-}
-
-void WorkerImageProcess::slot_hotUpdateSlavePixel(double newC) {
-    if (m_algo) { m_algo->updatePixelResolution(false, newC); m_algo->saveCurrentDictsToDisk(); }
-}
-
+void WorkerImageProcess::slot_setCalibMode(int mode) { if (m_algo) m_algo->setCalibMode(mode); }
+void WorkerImageProcess::slot_hotUpdateMasterPixel(double newC) { if (m_algo) { m_algo->updatePixelResolution(true, newC); m_algo->saveCurrentDictsToDisk(); } }
+void WorkerImageProcess::slot_hotUpdateSlavePixel(double newC) { if (m_algo) { m_algo->updatePixelResolution(false, newC); m_algo->saveCurrentDictsToDisk(); } }
 void WorkerImageProcess::slot_hotUpdateBaseline(double newOffset) {
-    if (m_algo) {
-        m_algo->updateBaselineOffset(newOffset);
-        m_algo->saveCurrentDictsToDisk();
-        emit sig_baselineCalibrated(newOffset);
-    }
+    if (m_algo) { m_algo->updateBaselineOffset(newOffset); m_algo->saveCurrentDictsToDisk(); emit sig_baselineCalibrated(newOffset); }
 }

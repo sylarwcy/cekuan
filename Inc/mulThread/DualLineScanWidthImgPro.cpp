@@ -89,6 +89,9 @@ void DualLineScanWidthImgPro::alignImages(const HalconCpp::HObject& imgLeft, con
 // =======================================================================
 // 🌟 降维打击：基于边缘梯度极性的一维测量（1D Caliper）
 // =======================================================================
+// 在 DualLineScanWidthImgPro.cpp 中找到 extractEdges 函数，替换为以下代码即可：
+
+/*
 void DualLineScanWidthImgPro::extractEdges(const HalconCpp::HObject& img, int frameHeight, QVector<double>& outMinX, QVector<double>& outMaxX) {
     if (!img.IsInitialized()) return;
     try {
@@ -98,44 +101,138 @@ void DualLineScanWidthImgPro::extractEdges(const HalconCpp::HObject& img, int fr
         int height = h_img[0].I();
 
         HalconCpp::HTuple measureHandle;
-
-        // 🌟 修复编译错误：Halcon 的带旋转角的矩形永远以 Rectangle2 命名！
-        // 创建一个长度等于图像宽、高度仅为 1 像素的卡尺，中心初始在第 0 行
         HalconCpp::GenMeasureRectangle2(0.5, width / 2.0, 0, width / 2.0, 0.5, width, height, "nearest_neighbor", &measureHandle);
 
-        for (int r = 0; r < height; ++r) {
-            // 将卡尺平移到当前行扫描
-            HalconCpp::TranslateMeasure(measureHandle, r + 0.5, width / 2.0);
+        // 嵌套 try-catch 保护，防止句柄未释放导致内存泄漏
+        try {
+            for (int r = 0; r < height; ++r) {
+                HalconCpp::TranslateMeasure(measureHandle, r + 0.5, width / 2.0);
 
-            HalconCpp::HTuple rowEdge, columnEdge, amplitude, distance;
+                HalconCpp::HTuple rowEdge, columnEdge, amplitude, distance;
+                HalconCpp::MeasurePos(img, measureHandle, 2.0, 30.0, "all", "all", &rowEdge, &columnEdge, &amplitude, &distance);
 
-            // Sigma=2.0 (平滑毛刺), Threshold=30 (忽略微弱渐变), "all" (抓取所有超过阈值的跳变边缘)
-            HalconCpp::MeasurePos(img, measureHandle, 2.0, 30.0, "all", "all", &rowEdge, &columnEdge, &amplitude, &distance);
+                double firstPos = -1.0;
+                double lastNeg = -1.0;
 
-            double firstPos = -1.0;
-            double lastNeg = -1.0;
-
-            // 遍历该行找到的所有亚像素边缘
-            for (int i = 0; i < columnEdge.Length(); ++i) {
-                if (amplitude[i].D() > 0) {
-                    // 🌟 正梯度 (暗 -> 亮)：说明这是钢板的左边缘！
-                    if (firstPos < 0) firstPos = columnEdge[i].D(); // 我们只信任最左侧出现的第一个钢板正边缘
-                } else {
-                    // 🌟 负梯度 (亮 -> 暗)：说明这是钢板的右边缘！
-                    lastNeg = columnEdge[i].D(); // 不断更新，最后留下的一定是最右侧的负边缘
+                for (int i = 0; i < columnEdge.Length(); ++i) {
+                    if (amplitude[i].D() > 0) {
+                        // 正梯度 (暗 -> 亮)：说明这是钢板的左边缘！
+                        if (firstPos < 0) firstPos = columnEdge[i].D();
+                    } else {
+                        // 负梯度 (亮 -> 暗)：说明这是钢板的右边缘！
+                        lastNeg = columnEdge[i].D();
+                    }
                 }
-            }
 
-            if (firstPos >= 0) {
-                if (outMinX[r] < 0 || firstPos < outMinX[r]) outMinX[r] = firstPos;
+                if (firstPos >= 0 && (outMinX[r] < 0 || firstPos < outMinX[r])) outMinX[r] = firstPos;
+                if (lastNeg >= 0 && (outMaxX[r] < 0 || lastNeg > outMaxX[r])) outMaxX[r] = lastNeg;
             }
-            if (lastNeg >= 0) {
-                if (outMaxX[r] < 0 || lastNeg > outMaxX[r]) outMaxX[r] = lastNeg;
-            }
+        } catch (...) {
+            // 捕获 MeasurePos 级别的微观异常，不作处理，默默放行到下面的释放句柄步骤
         }
 
         // 必须释放卡尺句柄防内存泄漏
         HalconCpp::CloseMeasure(measureHandle);
+    } catch (...) {}
+}
+*/
+// 在 DualLineScanWidthImgPro.cpp 中全量替换 extractEdges 函数：
+
+void DualLineScanWidthImgPro::extractEdges(const HalconCpp::HObject& img, int frameHeight, QVector<double>& outMinX, QVector<double>& outMaxX) {
+    if (!img.IsInitialized()) return;
+    try {
+        HalconCpp::HTuple w_img, h_img;
+        HalconCpp::GetImageSize(img, &w_img, &h_img);
+        int width = w_img[0].I();
+        int height = h_img[0].I();
+
+        if (m_use1DMeasureMode) {
+            // ==========================================================
+            // 🧠 算法 1：一维测量模式 (适合冷板、光照均匀、边缘对比度极高)
+            // ==========================================================
+            HalconCpp::HTuple measureHandle;
+            HalconCpp::GenMeasureRectangle2(0.5, width / 2.0, 0, width / 2.0, 0.5, width, height, "nearest_neighbor", &measureHandle);
+
+            try {
+                for (int r = 0; r < height; ++r) {
+                    HalconCpp::TranslateMeasure(measureHandle, r + 0.5, width / 2.0);
+
+                    HalconCpp::HTuple rowEdge, columnEdge, amplitude, distance;
+                    HalconCpp::MeasurePos(img, measureHandle, 2.0, 30.0, "all", "all", &rowEdge, &columnEdge, &amplitude, &distance);
+
+                    double firstPos = -1.0;
+                    double lastNeg = -1.0;
+
+                    for (int i = 0; i < columnEdge.Length(); ++i) {
+                        if (amplitude[i].D() > 0) {
+                            if (firstPos < 0) firstPos = columnEdge[i].D();
+                        } else {
+                            lastNeg = columnEdge[i].D();
+                        }
+                    }
+
+                    if (firstPos >= 0 && (outMinX[r] < 0 || firstPos < outMinX[r])) outMinX[r] = firstPos;
+                    if (lastNeg >= 0 && (outMaxX[r] < 0 || lastNeg > outMaxX[r])) outMaxX[r] = lastNeg;
+                }
+            } catch (...) {}
+
+            HalconCpp::CloseMeasure(measureHandle);
+
+        } else {
+            // ==========================================================
+            // 🧠 算法 2：连通域 + 亚像素轮廓平滑 (适合热板、热辐射反光、背景发灰)
+            // ==========================================================
+            try {
+                HalconCpp::HObject ho_RegionDark, ho_RegionFillUp, ho_ConnectedRegions;
+                HalconCpp::HObject ho_MainPlateRegion, ho_PlateContour, ho_SmoothedContour;
+                HalconCpp::HTuple hv_UsedThreshold;
+
+                // 1. 大津法(Otsu)自适应二值化
+                HalconCpp::BinaryThreshold(img, &ho_RegionDark, "max_separability", "light", &hv_UsedThreshold);
+
+                // ==========================================================
+                // 🌟 护城河：大津法绝对亮度底线拦截 (防黑屏乱画线核心)
+                // 黑屏或极暗环境下，Otsu会强行分割噪点，给出一个极低的阈值（例如 3、5、10）。
+                // 热板自带高亮辐射，正常阈值绝对会大于 25。
+                // 如果小于 25，说明画面里根本没钢板，全是噪点！直接 return 跳出！
+                // ==========================================================
+                if (hv_UsedThreshold.Length() == 0 || hv_UsedThreshold[0].D() < 50.0) {
+                    return;
+                }
+
+                // 2. 填充内部孔洞 (先填孔洞，防止后续由于表面氧化皮导致连通域断裂)
+                HalconCpp::FillUp(ho_RegionDark, &ho_RegionFillUp);
+
+                // 3. 打散连通域
+                HalconCpp::Connection(ho_RegionFillUp, &ho_ConnectedRegions);
+
+                // 4. 筛选最大面积 (精准定位主钢板，抛弃散落的火花、噪点)
+                HalconCpp::SelectShapeStd(ho_ConnectedRegions, &ho_MainPlateRegion, "max_area", 70);
+
+                // 5. 提取边界 XLD 亚像素轮廓
+                HalconCpp::GenContourRegionXld(ho_MainPlateRegion, &ho_PlateContour, "border");
+
+                // 6. 高斯平滑轮廓 (参数 7 能够完美抹平锯齿毛刺，进一步提升测宽稳定性)
+                HalconCpp::SmoothContoursXld(ho_PlateContour, &ho_SmoothedContour, 7);
+
+                // 7. 将平滑后的亚像素点阵阵列，精准投射回结果容器
+                HalconCpp::HTuple hv_Row, hv_Col;
+                HalconCpp::GetContourXld(ho_SmoothedContour, &hv_Row, &hv_Col);
+
+                int numPoints = hv_Row.Length();
+                for (int i = 0; i < numPoints; ++i) {
+                    // Y 轴(行)四舍五入找最近的像素行
+                    int r = static_cast<int>(std::round(hv_Row[i].D()));
+                    if (r >= 0 && r < height) {
+                        double c = hv_Col[i].D(); // X 轴保留极高精度的亚像素小数值
+
+                        // 录入最左和最右坐标
+                        if (outMinX[r] < 0 || c < outMinX[r]) outMinX[r] = c;
+                        if (outMaxX[r] < 0 || c > outMaxX[r]) outMaxX[r] = c;
+                    }
+                }
+            } catch (...) {}
+        }
     } catch (...) {}
 }
 
@@ -438,4 +535,104 @@ void DualLineScanWidthImgPro::saveCurrentDictsToDisk() {
         HalconCpp::SetDictTuple(dictS, "BaselineOffset", HalconCpp::HTuple(m_cameraBaselineOffsetMM));
         HalconCpp::WriteDict(dictS, (appDir + "/Camera_Slave_1DLUT.hdict").toLocal8Bit().constData(), HalconCpp::HTuple(), HalconCpp::HTuple());
     } catch (...) {}
+}
+
+// 追加到 DualLineScanWidthImgPro.cpp 的最下方
+
+// =======================================================================
+// 🌟 离线回放特供管道：直接吃进 DispImage 拼接图，反推出等效物理宽度
+// =======================================================================
+WidthResult DualLineScanWidthImgPro::processOfflineDispImage(const HalconCpp::HObject& dispImage, long long frameID) {
+    WidthResult result;
+    result.isValid = false;
+    result.dispImage = dispImage; // 保留图片以便UI画红线显示
+
+    if (!m_isInitialized || !dispImage.IsInitialized()) return result;
+
+    try {
+        HalconCpp::HTuple w, h;
+        HalconCpp::GetImageSize(dispImage, &w, &h);
+        int frameHeight = h[0].I();
+        int totalWidth = w[0].I();
+
+        // 依据在线拼接逻辑，反推左相机的补偿起始点
+        int mStartX = 270;
+        int mWidth = 3826;
+        if (mWidth > totalWidth) mWidth = totalWidth / 2;
+
+        QVector<double> minX(frameHeight, -1.0), maxX(frameHeight, -1.0);
+        // 复用一维卡尺或连通域大津法进行边缘提取
+        extractEdges(dispImage, frameHeight, minX, maxX);
+
+        double frameMinCol = 9999.0;
+        double frameMaxCol = -1.0;
+        QVector<double> vecWidths;
+
+        for(int y = 0; y < frameHeight; y++) {
+            if(minX[y] >= 0 && maxX[y] >= 0 && minX[y] < maxX[y]) {
+                double cL = minX[y];
+                double cR = maxX[y];
+                double XL = 0, XR = 0;
+
+                // 左边缘的物理映射 (通过1D-LUT字典)
+                if (cL <= mWidth) {
+                    double um = cL + mStartX;
+                    XL = a_m[0].D() * pow(um, 3) + b_m[0].D() * pow(um, 2) + c_m[0].D() * um + d_m[0].D();
+                } else {
+                    double us = cL - mWidth;
+                    XL = a_s[0].D() * pow(us, 3) + b_s[0].D() * pow(us, 2) + c_s[0].D() * us + d_s[0].D() + m_cameraBaselineOffsetMM;
+                }
+
+                // 右边缘的物理映射 (通过1D-LUT字典)
+                if (cR >= mWidth) {
+                    double us = cR - mWidth;
+                    XR = a_s[0].D() * pow(us, 3) + b_s[0].D() * pow(us, 2) + c_s[0].D() * us + d_s[0].D() + m_cameraBaselineOffsetMM;
+                } else {
+                    double um = cR + mStartX;
+                    XR = a_m[0].D() * pow(um, 3) + b_m[0].D() * pow(um, 2) + c_m[0].D() * um + d_m[0].D();
+                }
+
+                double finalW = XR - XL;
+
+                result.rowWidths.append(finalW);
+                result.contourRows.append(y);
+                result.contourColsLeft.append(cL); // 录入左边缘坐标用于UI画图
+                vecWidths.append(finalW);
+
+                if(cL < frameMinCol) frameMinCol = cL;
+                if(cR > frameMaxCol) frameMaxCol = cR;
+            }
+        }
+
+        // 补齐右边缘，用于 UI 闭合红色多边形画框
+        for (int y = frameHeight - 1; y >= 0; y--) {
+            if(minX[y] >= 0 && maxX[y] >= 0 && minX[y] < maxX[y]) {
+                result.contourRows.append(y);
+                result.contourColsLeft.append(maxX[y]);
+            }
+        }
+
+        if (!result.contourRows.isEmpty()) {
+            result.contourRows.append(result.contourRows.first());
+            result.contourColsLeft.append(result.contourColsLeft.first());
+        }
+
+        if (vecWidths.size() > 5) {
+            result.isValid = true;
+            std::sort(vecWidths.begin(), vecWidths.end());
+            result.widthValue = vecWidths[vecWidths.size() / 2];
+        }
+
+        if (!vecWidths.isEmpty()) {
+            result.renderLeftX = static_cast<int>(frameMinCol);
+            result.renderRightX = static_cast<int>(frameMaxCol);
+            result.renderY = frameHeight / 2;
+        }
+
+    } catch (HalconCpp::HException &e) {
+        qWarning() << "[离线特供引擎异常]:" << e.ErrorMessage().Text();
+        result.isValid = false;
+    }
+
+    return result;
 }
