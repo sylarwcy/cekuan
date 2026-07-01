@@ -1,4 +1,4 @@
-// ==================== [ dlgcalibration.h ] ====================
+﻿// ==================== [ dlgcalibration.h ] ====================
 #ifndef DLGCALIBRATION_H
 #define DLGCALIBRATION_H
 
@@ -6,6 +6,7 @@
 #include <QCoreApplication>
 #include <QString>
 #include <QVector>
+#include <QTimer>
 #include "workStationDataStructure.h"
 #include "PlateCalibrationManager.h"
 
@@ -63,6 +64,8 @@ private:
     PlateCalibrationManager m_calibManager;
 
     int m_currentStep{0};
+
+    QTimer *m_exposureDebounceTimer{nullptr};
 
     // 🌟 新增：厚度标定多点拟合池
     QVector<ThicknessCalibPoint> m_thicknessPoints;

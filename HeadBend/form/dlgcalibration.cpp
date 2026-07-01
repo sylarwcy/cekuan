@@ -24,6 +24,16 @@ DlgCalibration::DlgCalibration(QWidget *parent) : QDialog(parent), ui(new Ui::Dl
     connect(ui->spinSegment, QOverload<int>::of(&QSpinBox::valueChanged), this, &DlgCalibration::slot_spinSegmentChanged);
     connect(ui->lineEdit, &QLineEdit::editingFinished, this, &DlgCalibration::slot_speedEditingFinished);
     connect(ui->lineEdit_exposure, &QLineEdit::editingFinished, this, &DlgCalibration::slot_exposureEditingFinished);
+
+    // QLineEdit 的 editingFinished 只有失焦/回车才触发。这里增加 textEdited + 防抖，做到界面改数值后实时下发。
+    m_exposureDebounceTimer = new QTimer(this);
+    m_exposureDebounceTimer->setSingleShot(true);
+    m_exposureDebounceTimer->setInterval(200);
+    connect(m_exposureDebounceTimer, &QTimer::timeout, this, &DlgCalibration::slot_exposureEditingFinished);
+    connect(ui->lineEdit_exposure, &QLineEdit::textEdited, this, [this](const QString&) {
+        if (m_exposureDebounceTimer) m_exposureDebounceTimer->start();
+    });
+
     connect(ui->lineEdit_calibWidth, &QLineEdit::editingFinished, this, &DlgCalibration::slot_calibWidthEditingFinished);
     connect(ui->lineEdit_calibThickness, &QLineEdit::editingFinished, this, &DlgCalibration::slot_calibThicknessEditingFinished);
 
@@ -73,10 +83,33 @@ void DlgCalibration::slot_speedEditingFinished() {
 void DlgCalibration::slot_exposureEditingFinished() {
     int exp_us = ui->lineEdit_exposure->text().toInt();
     if (exp_us < 10) return;
+
     QSettings settings(QCoreApplication::applicationDirPath() + "/setting.ini", QSettings::IniFormat);
-    settings.setValue("CameraFront/front_expTime", exp_us); settings.setValue("CameraBack/back_expTime", exp_us);
+    settings.setValue("CameraFront/front_expTime", exp_us);
+    settings.setValue("CameraBack/back_expTime", exp_us);
+
+    // 保留原信号，兼容外部已有 connect。
     emit sig_exposureTimeChanged(exp_us);
-    ui->lbl_calibStatus->setText(QString("曝光时间已下发: %1 us，行频已锁定在95%极速").arg(exp_us));
+
+    // 关键修复：本文件只 emit 了信号，但已上传工程里没有任何 connect 把它接到 WorkerCamera。
+    // 这里直接跨线程投递到真实相机对象，确保标定弹窗独立打开时也能实时生效。
+    bool delivered = false;
+    MyApplication *pApp = (MyApplication *) qApp;
+    if (pApp) {
+        for (auto *ws : pApp->m_workstationList) {
+            if (ws && ws->m_pWorkerCamera) {
+                bool ok = QMetaObject::invokeMethod(ws->m_pWorkerCamera,
+                                                    "onUpdateExposureTime",
+                                                    Qt::QueuedConnection,
+                                                    Q_ARG(int, exp_us));
+                delivered = delivered || ok;
+            }
+        }
+    }
+
+    ui->lbl_calibStatus->setText(delivered
+        ? QString("曝光时间已实时下发: %1 us").arg(exp_us)
+        : QString("曝光时间已保存到配置，但未找到在线相机对象: %1 us").arg(exp_us));
 }
 
 void DlgCalibration::on_btn_autoMasterPixel_clicked() {
